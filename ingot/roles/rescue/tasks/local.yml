@@ -1,0 +1,53 @@
+- name: "[Local] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['local']}}"
+  register: ayasuna__ingot__rescue__privates__arguments
+  tags:
+    - "ayasuna__ingot__rescue"
+    - "ayasuna__ingot__rescue@local"
+
+- name: "[Local] Including tasks from local/hostname.yml to configure the hostname"
+  ansible.builtin.include_tasks:
+    file: "local/hostname.yml"
+    apply:
+      tags:
+        - "ayasuna__ingot__rescue"
+        - "ayasuna__ingot__rescue@local"
+  tags:
+    - "ayasuna__ingot__rescue"
+    - "ayasuna__ingot__rescue@local"
+
+- name: "[Local] Including tasks from local/users.yml to configure the users"
+  ansible.builtin.include_tasks:
+    file: "local/users.yml"
+    apply:
+      tags:
+        - "ayasuna__ingot__rescue"
+        - "ayasuna__ingot__rescue@local"
+  tags:
+    - "ayasuna__ingot__rescue"
+    - "ayasuna__ingot__rescue@local"
+
+- name: "[Local] Including tasks from local/firewall.yml to configure the firewall"
+  ansible.builtin.include_tasks:
+    file: "local/firewall.yml"
+    apply:
+      tags:
+        - "ayasuna__ingot__rescue"
+        - "ayasuna__ingot__rescue@local"
+  tags:
+    - "ayasuna__ingot__rescue"
+    - "ayasuna__ingot__rescue@local"
+
+- name: "[Local] Including tasks from local/network.yml to configure the network (interfaces)"
+  ansible.builtin.include_tasks:
+    file: "local/network.yml"
+    apply:
+      tags:
+        - "ayasuna__ingot__rescue"
+        - "ayasuna__ingot__rescue@local"
+  tags:
+    - "ayasuna__ingot__rescue"
+    - "ayasuna__ingot__rescue@local"
+
+

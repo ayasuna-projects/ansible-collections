@@ -1,0 +1,14 @@
+namespace: "ayasuna"
+name: "utilities"
+description: "Contains utility roles & plugins"
+version: "1.0.0"
+readme: "README.md"
+repository: "https://github.com/ayasuna-projects/ansible-collections"
+dependencies: {}
+authors:
+  - "Philipp Schmalenbach"
+license:
+  - "MIT"
+tags:
+  - "ayasuna"
+  - "utilities"

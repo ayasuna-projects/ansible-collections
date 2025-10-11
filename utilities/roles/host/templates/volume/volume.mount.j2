@@ -1,0 +1,16 @@
+[Unit]
+Description={{ ayasuna__utilities__host__privates__arguments.prepared.partition_name }} volume ({{ ayasuna__utilities__host__privates__arguments.prepared.mount_target }})
+DefaultDependencies=yes
+
+[Mount]
+What=/dev/disk/by-partuuid/{{ ayasuna__utilities__host__privates__partition['partuuid'] }}
+Where={{ ayasuna__utilities__host__privates__arguments.prepared.mount_target }}
+Type={{ ayasuna__utilities__host__privates__arguments.prepared.filesystem_type }}
+Options=defaults
+SloppyOptions=no
+LazyUnmount=no
+ReadWriteOnly=yes
+ForceUnmount=no
+
+[Install]
+WantedBy=multi-user.target

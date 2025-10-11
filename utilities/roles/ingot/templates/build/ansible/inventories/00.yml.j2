@@ -1,0 +1,3 @@
+all:
+  hosts:
+    localhost: {{ (ayasuna__utilities__ingot__privates__build_arguments.prepared.build_ansible_role_arguments | combine({ 'ansible_host': '::1', 'ansible_user': 'root', 'ansible_become': false })) | to_json }}

@@ -1,0 +1,101 @@
+- name: "[Local] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['local']}}"
+  register: ayasuna__ingot__k8s__privates__arguments
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@local"
+
+- block:
+    - name: "[Local] Including tasks from local/hostname.yml to configure the hostname"
+      ansible.builtin.include_tasks:
+        file: "local/hostname.yml"
+        apply:
+          tags:
+            - "ayasuna__ingot__k8s"
+            - "ayasuna__ingot__k8s@local"
+      tags:
+        - "ayasuna__ingot__k8s"
+        - "ayasuna__ingot__k8s@local"
+    
+    - name: "[Local] Including tasks from local/users.yml to configure the users"
+      ansible.builtin.include_tasks:
+        file: "local/users.yml"
+        apply:
+          tags:
+            - "ayasuna__ingot__k8s"
+            - "ayasuna__ingot__k8s@local"
+      tags:
+        - "ayasuna__ingot__k8s"
+        - "ayasuna__ingot__k8s@local"
+    
+    - name: "[Local] Including tasks from local/firewall.yml to configure the firewall"
+      ansible.builtin.include_tasks:
+        file: "local/firewall.yml"
+        apply:
+          tags:
+            - "ayasuna__ingot__k8s"
+            - "ayasuna__ingot__k8s@local"
+      tags:
+        - "ayasuna__ingot__k8s"
+        - "ayasuna__ingot__k8s@local"
+    
+    - name: "[Local] Including tasks from local/ssh.yml to configure the SSH service"
+      ansible.builtin.include_tasks:
+        file: "local/ssh.yml"
+        apply:
+          tags:
+            - "ayasuna__ingot__k8s"
+            - "ayasuna__ingot__k8s@local"
+      tags:
+        - "ayasuna__ingot__k8s"
+        - "ayasuna__ingot__k8s@local"
+    
+    - name: "[Local] Including tasks from local/network.yml to configure the network (interfaces)"
+      ansible.builtin.include_tasks:
+        file: "local/network.yml"
+        apply:
+          tags:
+            - "ayasuna__ingot__k8s"
+            - "ayasuna__ingot__k8s@local"
+      tags:
+        - "ayasuna__ingot__k8s"
+        - "ayasuna__ingot__k8s@local"
+
+    - name: "[Local] Including tasks from local/iscsi.yml to configure ISCSI"
+      ansible.builtin.include_tasks:
+        file: "local/iscsi.yml"
+        apply:
+          tags:
+            - "ayasuna__ingot__k8s"
+            - "ayasuna__ingot__k8s@local"
+      tags:
+        - "ayasuna__ingot__k8s"
+        - "ayasuna__ingot__k8s@local"
+    
+    - name: "[Local] Including tasks from local/k3s.yml to configure K3s"
+      ansible.builtin.include_tasks:
+        file: "local/k3s.yml"
+        apply:
+          tags:
+            - "ayasuna__ingot__k8s"
+            - "ayasuna__ingot__k8s@local"
+      tags:
+        - "ayasuna__ingot__k8s"
+        - "ayasuna__ingot__k8s@local"
+    
+    - name: "[Local] Including tasks from local/reload.yml to reload UDEV ruleset"
+      ansible.builtin.include_tasks:
+        file: "local/reload.yml"
+        apply:
+          tags:
+            - "ayasuna__ingot__k8s"
+            - "ayasuna__ingot__k8s@local"
+      tags:
+        - "ayasuna__ingot__k8s"
+        - "ayasuna__ingot__k8s@local"
+  always:
+    - name: "[Local] Waiting for 30 seconds"
+      ansible.builtin.wait_for:
+        timeout: 30
+      when: ayasuna__ingot__k8s__privates__arguments.prepared.debug

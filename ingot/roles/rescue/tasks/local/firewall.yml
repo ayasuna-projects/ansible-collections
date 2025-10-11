@@ -1,0 +1,15 @@
+- name: "[Local>Firewall] Including tasks from role 'ayasuna.utilities.host' to configure the firewall"
+  ansible.builtin.include_role:
+    name: "ayasuna.utilities.host"
+    tasks_from: "firewall.yml"
+  vars:
+    ayasuna__utilities__host__inputs__presets:
+      - "filter@log"
+      - "filter@input.default"
+      - "filter@input.ssh"
+    ayasuna__utilities__host__inputs__definitions: []
+    ayasuna__utilities__host__inputs__prerouting_chains: []
+    ayasuna__utilities__host__inputs__input_chains: []
+    ayasuna__utilities__host__inputs__forward_chains: []
+    ayasuna__utilities__host__inputs__output_chains: []
+    ayasuna__utilities__host__inputs__postrouting_chains: []

@@ -1,0 +1,232 @@
+- name: "[Build] Setting installer ISO related facts"
+  ansible.builtin.set_fact:
+    ayasuna__utilities__ingot__privates__build_installer_iso_sources:
+      "debian:13-amd64":
+        url: "https://cdimage.debian.org/cdimage/archive/13.0.0/amd64/iso-cd/debian-13.0.0-amd64-netinst.iso"
+        checksum: "sha512:https://cdimage.debian.org/cdimage/archive/13.0.0/amd64/iso-cd/SHA512SUMS"
+
+- name: "[Build] Unmounting directory (if it is mounted) from a previous build as it conflicts with this build"
+  ansible.posix.mount:
+    path: "{{ ayasuna__utilities__ingot__privates__build_item }}"
+    state: "unmounted"
+  loop:
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/mnt/"
+  loop_control:
+    loop_var: "ayasuna__utilities__ingot__privates__build_item"
+    index_var: "ayasuna__utilities__ingot__privates__build_index"
+
+- name: "[Build] Deleting artifacts (if they exist) from a previous build that conflict with this build"
+  ansible.builtin.file:
+    path: "{{ ayasuna__utilities__ingot__privates__build_item }}"
+    state: "absent"
+  loop:
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/http/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/output/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/root.squashfs"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/output/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/boot.img"
+  loop_control:
+    loop_var: "ayasuna__utilities__ingot__privates__build_item"
+    index_var: "ayasuna__utilities__ingot__privates__build_index"
+
+- name: "[Build] Creating artifact directories (if they don't already exist)"
+  ansible.builtin.file:
+    path: "{{ ayasuna__utilities__ingot__privates__build_item }}"
+    recurse: false
+    state: "directory"
+    mode: "0755"
+    owner: "root"
+    group: "root"
+  loop:
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/playbooks/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/playbooks/templates/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/inventories/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/collections/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/http/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/"
+    - "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/mnt/"
+  loop_control:
+    loop_var: "ayasuna__utilities__ingot__privates__build_item"
+    index_var: "ayasuna__utilities__ingot__privates__build_index"
+
+- name: "[Build] Copying files to artifacts directory"
+  ansible.builtin.copy:
+    src: "{{ ayasuna__utilities__ingot__privates__build_item.src }}"
+    dest: "{{ ayasuna__utilities__ingot__privates__build_item.tgt }}"
+    mode: "0644"
+    owner: "root"
+    group: "root"
+  loop:
+    - src: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.qemu_efi_code }}"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/efi.code.fd"
+    - src: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.qemu_efi_vars }}"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/efi.vars.fd"
+    - src: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.qemu_efi_vars }}"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/efi.vars.fd"
+  loop_control:
+    loop_var: "ayasuna__utilities__ingot__privates__build_item"
+    index_var: "ayasuna__utilities__ingot__privates__build_index"
+
+- name: "[Build] Creating files from templates"
+  ansible.builtin.template:
+    src: "{{ ayasuna__utilities__ingot__privates__build_item.src }}"
+    dest: "{{ ayasuna__utilities__ingot__privates__build_item.tgt }}"
+    mode: "0644"
+    owner: "root"
+    group: "root"
+  loop:
+    - src: "build/ansible/playbooks/install.yml.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/playbooks/install.yml"
+    - src: "build/ansible/playbooks/local.yml.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/playbooks/local.yml"
+    - src: "build/ansible/playbooks/network.yml.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/playbooks/network.yml"
+    - src: "build/ansible/playbooks/final.yml.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/playbooks/final.yml"
+    - src: "build/ansible/playbooks/test.yml.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/playbooks/test.yml"
+    - src: "build/ansible/inventories/00.yml.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/inventories/00.yml"
+    - src: "build/ansible/ansible.cfg.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/ansible.cfg"
+    - src: "build/ansible/requirements.yml.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/requirements.yml"
+    - src: "build/preseed.cfg.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/http/preseed.cfg"
+    - src: "build/build.pkr.hcl.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/main.pkr.hcl"
+    - src: "build/test.pkr.hcl.j2"
+      tgt: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/main.pkr.hcl"
+  loop_control:
+    loop_var: "ayasuna__utilities__ingot__privates__build_item"
+    index_var: "ayasuna__utilities__ingot__privates__build_index"
+
+- name: "[Build] Installing ansible collections via 'ansible-galaxy collection install'"
+  ansible.builtin.shell:
+    cmd: "ansible-galaxy collection install -r {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/requirements.yml -p {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/ansible/collections/ --force-with-deps"
+
+- name: "[Build] Downloading ISO"
+  ansible.builtin.get_url:
+    url: "{{ ayasuna__utilities__ingot__privates__build_installer_iso_sources[ayasuna__utilities__ingot__privates__build_arguments.prepared.build_operating_system].url }}"
+    checksum: "{{ ayasuna__utilities__ingot__privates__build_installer_iso_sources[ayasuna__utilities__ingot__privates__build_arguments.prepared.build_operating_system].checksum }}"
+    dest: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/installer.iso"
+    mode: "0644"
+    owner: "root"
+    group: "root"
+
+- name: "[Build] Writing SSH key to use to connect to test VM to file"
+  ansible.builtin.copy:
+    dest: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/ssh.key"
+    content: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.test_ssh_private_key }}"
+    force: true
+    mode: "0660"
+    owner: "root"
+    group: "root"
+
+- name: "[Build] Creating disk to later boot test VM from"
+  community.general.filesize:
+    path: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/boot.img"
+    size: "6144M"
+    force: true
+    mode: "0644"
+    owner: "root"
+    group: "root"
+
+- name: "[Build] Creating additional test VM disks"
+  community.general.filesize:
+    path: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/additional{{ ayasuna__utilities__ingot__privates__build_index }}.img"
+    size: "{{ ayasuna__utilities__ingot__privates__build_item.size }}M"
+    force: true
+    mode: "0644"
+    owner: "root"
+    group: "root"
+  loop: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.test_disks_additional }}"
+  loop_control:
+    loop_var: "ayasuna__utilities__ingot__privates__build_item"
+    index_var: "ayasuna__utilities__ingot__privates__build_index"
+
+- name: "[Build] Initializing packer configuration for disk image build"
+  ansible.builtin.shell:
+    cmd: "packer init {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/main.pkr.hcl"
+
+- block:    
+    - name: "[Build] Building disk image via packer"
+      ansible.builtin.shell:
+        cmd: "packer build {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/main.pkr.hcl"
+      register: ayasuna__utilities__ingot__privates__build_packer_build
+  always:
+    - name: "[Build] Printing STDOUT of disk image build"
+      ansible.builtin.debug:
+        var: ayasuna__utilities__ingot__privates__build_packer_build.stdout_lines
+
+- block:
+    - name: "[Build] Mounting root filesystem partition of built disk image"
+      ansible.posix.mount:
+        path: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/"
+        src: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/output/build.img"
+        opts: "loop,offset=1024458752" # We assume that QEMU used a sector size of 512 bytes for the disk
+        fstype: "ext4"
+        state: "ephemeral"
+
+    - name: "[Build] Creating squashfs image (ingot) from root filesystem of built disk image"
+      ansible.builtin.shell:
+        cmd: "mksquashfs {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/ {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/root.squashfs -xattrs -comp gzip -b 128k -e {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/dev/** -e {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/sys/** -e {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/tmp/** -e {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/proc/** -e {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/run/**"
+
+  always:
+    - name: "[Build] Unmounting root filesystem partition of built disk image"
+      ansible.posix.mount:
+        path: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/"
+        state: "unmounted" 
+
+- name: "[Build] Attaching test VM boot disk to loop device"
+  ansible.builtin.shell:
+    cmd: "losetup --find --show {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/boot.img"
+  register: ayasuna__utilities__ingot__privates__build_boot_disk_loop_device
+
+- block:
+    
+    - name: "[Build] Deploying squashfs image (ingot) to test VM boot disk"
+      ansible.builtin.include_role:
+        name: "ayasuna.utilities.ingot"
+        tasks_from: "deploy.yml"
+      vars:
+        ayasuna__utilities__ingot__inputs__source_ingot: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/root.squashfs"
+        ayasuna__utilities__ingot__inputs__source_arguments: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.test_arguments }}"
+        ayasuna__utilities__ingot__inputs__target_device_path: "{{ ayasuna__utilities__ingot__privates__build_boot_disk_loop_device.stdout_lines[0] }}"
+        ayasuna__utilities__ingot__inputs__target_partitions_boot_size: 512
+        ayasuna__utilities__ingot__inputs__target_partitions_deployment_size: 4096
+  always:
+    - name: "[Build] Detaching test VM boot disk from loop device '{{ ayasuna__utilities__ingot__privates__build_boot_disk_loop_device.stdout_lines[0] }}'"
+      ansible.builtin.shell:
+        cmd: "losetup --detach {{ ayasuna__utilities__ingot__privates__build_boot_disk_loop_device.stdout_lines[0] }}"
+
+
+- name: "[Build] Initializing packer configuration for squashfs image (ingot) test"
+  ansible.builtin.shell:
+    cmd: "packer init {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/main.pkr.hcl"
+
+- block:    
+    - name: "[Build] Testing squashfs image (ingot) via packer"
+      ansible.builtin.shell:
+        cmd: "packer build {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/test/main.pkr.hcl"
+      register: ayasuna__utilities__ingot__privates__build_packer_test
+  always:
+    - name: "[Build] Printing STDOUT of squashfs image (ingot) test"
+      ansible.builtin.debug:
+        var: ayasuna__utilities__ingot__privates__build_packer_test.stdout_lines
+
+- name: "[Build] Copying squashfs image (ingot) to target file '{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.target_file }}'"
+  ansible.builtin.copy:
+    src: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/root.squashfs"
+    dest: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.target_file }}"
+    force: true
+    mode: "0777"
+    owner: "root"
+    group: "root"

@@ -1,0 +1,27 @@
+- name: "[Upsert Account>Upsert] Checking if the ACME account key needs to be created"
+  ansible.builtin.stat:
+    path: "{{ ayasuna__utilities__acme__privates__account_key_path }}"
+  register: ayasuna__utilities__acme__privates__account_key_path_stat_result
+    
+- name: "[Upsert Account>Upsert] Creating ACME account key"
+  ansible.builtin.openssl_privatekey:
+    path: "{{ ayasuna__utilities__acme__privates__account_key_path }}"
+    passphrase: "{{ ayasuna__utilities__acme__privates__arguments.prepared.password }}"
+    cipher: "auto"
+    curve: "secp384r1"
+    type: "ECC"
+    force: false
+  when: not ayasuna__utilities__acme__privates__account_key_path_stat_result.stat.exists
+
+- name: "[Upsert Account>Upsert] Upserting ACME account"
+  ansible.builtin.acme_account:
+    account_key_src: "{{ ayasuna__utilities__acme__privates__account_key_path }}"
+    account_key_passphrase: "{{ ayasuna__utilities__acme__privates__arguments.prepared.password }}"
+    acme_directory: "{{ ayasuna__utilities__acme__privates__arguments.prepared.acme_directory }}"
+    acme_version: 2
+    allow_creation: true
+    state: "present"
+    terms_agreed: true
+    validate_certs: true
+    contact:
+      - "mailto:{{ ayasuna__utilities__acme__privates__arguments.prepared.account_email }}"

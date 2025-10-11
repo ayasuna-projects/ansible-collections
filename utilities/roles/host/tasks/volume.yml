@@ -1,0 +1,18 @@
+- name: "[Volume] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['volume']}}"
+  register: ayasuna__utilities__host__privates__arguments
+  tags:
+    - "ayasuna__utilities__host"
+    - "ayasuna__utilities__host@volume"
+
+- name: "[Volume] Including tasks from volume/main.yml to setup the volume"
+  ansible.builtin.include_tasks:
+    file: "volume/main.yml"
+    apply:
+      tags:
+        - "ayasuna__utilities__host"
+        - "ayasuna__utilities__host@volume"
+  tags:
+    - "ayasuna__utilities__host"
+    - "ayasuna__utilities__host@volume"

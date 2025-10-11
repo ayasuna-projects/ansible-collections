@@ -1,0 +1,34 @@
+- ayasuna.utilities.prepare_arguments:
+    specification: "{{ (lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['main'] }}"
+  register: ayasuna__utilities__udevadm__privates__build_arguments
+  tags:
+    - "ayasuna__utilities__udevadm"
+    - "ayasuna__utilities__udevadm@main"
+
+- name: "[Main] Reloading UDEV ruleset"
+  ansible.builtin.shell:
+    cmd: "udevadm control --reload"
+  when: ayasuna__utilities__udevadm__privates__build_arguments.prepared.reload
+  tags:
+    - "ayasuna__utilities__udevadm"
+    - "ayasuna__utilities__udevadm@main"
+
+- name: "[Main] Executing 'udevadm trigger' command to apply the UDEV ruleset changes"
+  ansible.builtin.shell:
+    cmd: "udevadm trigger --verbose --action={{ ayasuna__utilities__udevadm__privates__trigger.action }} --type={{ ayasuna__utilities__udevadm__privates__trigger.type }} --subsystem-match={{ ayasuna__utilities__udevadm__privates__trigger.match_subsystem }}"
+  loop: "{{ ayasuna__utilities__udevadm__privates__build_arguments.prepared.trigger }}"
+  loop_control:
+    loop_var: ayasuna__utilities__udevadm__privates__trigger
+    index_var: ayasuna__utilities__udevadm__privates__trigger_index
+  tags:
+    - "ayasuna__utilities__udevadm"
+    - "ayasuna__utilities__udevadm@main"
+
+- name: "[Main] Executing 'udevadm settle' command to wait for the UDEV event queue to become empty"
+  ansible.builtin.shell:
+    cmd: "udevadm settle --timeout={{ ayasuna__utilities__udevadm__privates__build_arguments.prepared.settle_timeout }}"
+  when: ayasuna__utilities__udevadm__privates__build_arguments.prepared.settle_timeout > 0
+  failed_when: false
+  tags:
+    - "ayasuna__utilities__udevadm"
+    - "ayasuna__utilities__udevadm@main"

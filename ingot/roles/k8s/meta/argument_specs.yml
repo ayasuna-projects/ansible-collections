@@ -1,0 +1,326 @@
+argument_specs:
+  install:
+    short_description: "The install hook"
+    context:
+      prefixes:
+        - "ayasuna__ingot__k8s__inputs__"
+    options:
+      ayasuna__ingot__k8s__inputs__k3s_version:
+        type: "str"
+        description: "The K3s version to install"
+        required: true
+      ayasuna__ingot__k8s__inputs__packages:
+        type: "list"
+        description: "The set of additional APT packages to install"
+        element: "str"
+        default: []
+  local:
+    short_description: "The local hook"
+    context: &default_context
+      prefixes:
+        - "ayasuna__ingot__k8s__inputs__"
+      # language=python        
+      preparer: |
+        import copy
+        
+        def _create_cli_argument(name: str, value: str | None) -> str:
+          f"""
+          Creates a single CLI argument with the given {name} and {value}
+          
+          :param name: The name of the CLI argument
+          :param value: The value of the CLI argument
+          :return: The created CLI argument
+          """
+          
+          if value is None:
+              return f"--{name}"
+          
+          return f"--{name} \"{value}\""
+        
+        def _get_flannel_backend(option: str) -> str:
+          if option == "wireguard":
+            return "wireguard-native"
+          
+          return option
+        
+        def convert(arguments: dict) -> dict:
+            result = copy.deepcopy(arguments)
+            
+            ipv6_enabled = result["k3s_node_ipv6_ip"] is not None
+            ipv4_enabled = result["k3s_node_ipv4_ip"] is not None
+            is_bootstrap_node = result["k3s_cluster_bootstrap_node_ip"] == result["k3s_node_ipv6_ip"] or result["k3s_cluster_bootstrap_node_ip"] == result["k3s_node_ipv4_ip"]
+            
+            flannel_backend = result["k3s_cluster_flannel_backend"]
+            
+            node_type = result["k3s_node_type"]
+            node_ips = []
+            cluster_service_networks = []
+            cluster_pod_networks = []
+            cluster_dns_ips = []
+                        
+            if ipv6_enabled:
+                cluster_service_ipv6_network_prefix_parts = result["k3s_cluster_ipv6_service_network"].split("::/")
+                cluster_service_ipv6_network_prefix = cluster_service_ipv6_network_prefix_parts[0]
+                
+                node_ips.append(result["k3s_node_ipv6_ip"])
+                cluster_service_networks.append(result["k3s_cluster_ipv6_service_network"])
+                cluster_pod_networks.append(result["k3s_cluster_ipv6_pod_network"])
+                cluster_dns_ips.append(f"{cluster_service_ipv6_network_prefix}::10")
+                
+            if ipv4_enabled:
+                cluster_service_ipv4_network_prefix_parts = result["k3s_cluster_ipv4_service_network"].split(".")
+                cluster_service_ipv4_network_prefix = cluster_service_ipv4_network_prefix_parts[0] + "." + cluster_service_ipv4_network_prefix_parts[1]
+                
+                node_ips.append(result["k3s_node_ipv4_ip"])
+                cluster_service_networks.append(result["k3s_cluster_ipv4_service_network"])
+                cluster_pod_networks.append(result["k3s_cluster_ipv4_pod_network"])
+                cluster_dns_ips.append(f"{cluster_service_ipv4_network_prefix}.0.10")
+                            
+            cli_args: list[str] = [
+                _create_cli_argument("node-ip", ",".join(node_ips)),
+                _create_cli_argument("node-name", result["k3s_node_name"]),
+                _create_cli_argument("flannel-iface", "wan0"),
+                _create_cli_argument("token", result["k3s_cluster_token"])
+            ]
+            
+            if node_type == "server":
+                cli_args.insert(0, "server")
+                
+                if is_bootstrap_node:
+                    cli_args.append(_create_cli_argument("cluster-init", None))
+                
+                cli_args.append(_create_cli_argument("cluster-cidr", ",".join(cluster_pod_networks)))
+                cli_args.append(_create_cli_argument("service-cidr", ",".join(cluster_service_networks)))
+                cli_args.append(_create_cli_argument("cluster-dns", ",".join(cluster_dns_ips)))
+                cli_args.append(_create_cli_argument("flannel-backend", _get_flannel_backend(flannel_backend)))
+                
+                if ipv6_enabled:
+                    cli_args.append(_create_cli_argument("flannel-ipv6-masq", None))
+                
+                cli_args.append(_create_cli_argument("cluster-domain", result["k3s_cluster_domain"]))
+            
+            elif node_type == "agent":
+                cli_args.insert(0, "agent")
+                
+                
+            if not is_bootstrap_node:
+                if ":" in result["k3s_cluster_bootstrap_node_ip"]:
+                    cli_args.append(_create_cli_argument("server", f"https://[{result["k3s_cluster_bootstrap_node_ip"]}]:6443"))
+                else:
+                    cli_args.append(_create_cli_argument("server", f"https://{result["k3s_cluster_bootstrap_node_ip"]}:6443"))
+                
+            result["k3s_node_service_cli_arguments"] = " ".join(cli_args)
+                                
+            return result
+        
+    options: &default_options
+      ayasuna__ingot__k8s__inputs__debug:
+        description: "Whether to run in debug mode, which will add a few 'wait_for' tasks and additional debug logs"
+        type: "bool"
+        default: false
+      ayasuna__ingot__k8s__inputs__name:
+        description: "Defines the system host name"
+        type: "str"
+        required: true
+      ayasuna__ingot__k8s__inputs__users:
+        type: "list"
+        description: |
+          Defines the users to setup/configure, all of the users (except for root) will be able to become root by using 'sudo'
+        required: true
+        elements: "dict"
+        context:
+          rules:
+            - expression: "(arguments.users | length) > 0"
+              message: "At least one user must be specified"
+            - expression: "(arguments.users | map(attribute='name') | select('==', 'root') | length) == 1"
+              message: "At least the root user must be specified"
+        options:
+          name:
+            type: "str"
+            description: "The user name"
+            required: true
+          password:
+            type: "str"
+            description: "The password of the user"
+            required: true
+          public_keys:
+            type: "list"
+            description: "The public keys to setup"
+            elements: "dict"
+            required: true
+            options:
+              name:
+                type: "str"
+                description: "The name of the public key"
+                required: true
+              content:
+                type: "str"
+                description: "The contents of the public key"
+                required: true
+              type:
+                type: "str"
+                description: "The public key type"
+                required: true
+                choices:
+                  - "ecdsa-sha2-nistp521"
+      ayasuna__ingot__k8s__inputs__wan_interfaces:
+        type: "list"
+        description: "The interfaces that are part of the active-backup bond that form the WAN interface"
+        required: true
+        elements: "dict"
+        options:
+          mac:
+            type: "str"
+            description: "The MAC address of the (physical) interface that is part of the bond"
+            required: true
+      ayasuna__ingot__k8s__inputs__wan_mac:
+        type: "str"
+        description: |
+          The MAC address the bond interface should use.
+          If set the 'fail_over_mac' policy of the active-backup bond will be 'none' otherwise it'll be 'active'. 
+        default: null
+      ayasuna__ingot__k8s__inputs__wan_mtu:
+        type: "int"
+        description: "The MTU to use for the WAN interface as well as all interfaces that are part of the bond"
+        default: 1500
+      ayasuna__ingot__k8s__inputs__wan_ips:
+        type: "list"
+        description: "The (static) IP addresses (CIDRs) to configure for the interface"
+        required: true
+        elements: "str"
+      ayasuna__ingot__k8s__inputs__wan_nameservers:
+        type: "list"
+        description: "The (static) nameservers to configure for the interface"
+        required: true
+        elements: "str"
+      ayasuna__ingot__k8s__inputs__wan_dhcp:
+        type: "bool"
+        description: |
+          Whether DHCPv4 is enabled or disabled.
+          DHCPv6 is currently not explicitly configurable.
+          If router advertisements are accepted, however, it might still be triggered by them (M-Flag, O-Flag).
+        required: true
+      ayasuna__ingot__k8s__inputs__wan_accept_ra:
+        type: "bool"
+        description: "Whether IPv6 RAs are accepted."
+        required: true
+      ayasuna__ingot__k8s__inputs__wan_routes:
+        type: "list"
+        description: "A set of additional routes to configure for the interface"
+        required: true
+        elements: "dict"
+        options:
+          to:
+            type: "str"
+            description: "The route target (CIDR)"
+            required: true
+          via:
+            type: "str"
+            description: "The route gateway"
+            required: true
+      ayasuna__ingot__k8s__inputs__k3s_node_type:
+        type: "str"
+        description: |
+          The K3s node type.
+          If 'server' this node will run the K3s server.
+          If 'agent' this node will run the K3s agent.
+        required: true
+        choices:
+          - "server"
+          - "agent"
+        context:
+          rules:
+            - expression: "(arguments.k3s_node_ipv4_ip is not none or arguments.k3s_node_ipv6_ip is not none)"
+              message: "At least one node IP must be specified (IPv4 and/or IPv6)"
+      ayasuna__ingot__k8s__inputs__k3s_node_name:
+        type: "str"
+        description: "The unique name of the node within the cluster"
+        required: true
+      ayasuna__ingot__k8s__inputs__k3s_node_ipv4_ip:
+        type: "str"
+        description: "The IPv4 IP of the node"
+        default: null
+        context:
+          rules:
+            - expression: "(arguments.k3s_node_ipv4_ip is none and arguments.k3s_cluster_ipv4_service_network is none and arguments.k3s_cluster_ipv4_pod_network is none) or (arguments.k3s_node_ipv4_ip is not none and arguments.k3s_cluster_ipv4_service_network is not none and arguments.k3s_cluster_ipv4_pod_network is not none and arguments.k3s_cluster_ipv4_trusted_networks is not none)"
+              message: "Either all IPv4 related settings must be specified or none"
+      ayasuna__ingot__k8s__inputs__k3s_node_ipv6_ip:
+        type: "str"
+        description: "The IPv6 IP of the node"
+        default: null
+        context:
+          rules:
+            - expression: "(arguments.k3s_node_ipv6_ip is none and arguments.k3s_cluster_ipv6_service_network is none and arguments.k3s_cluster_ipv6_pod_network is none) or (arguments.k3s_node_ipv6_ip is not none and arguments.k3s_cluster_ipv6_service_network is not none and arguments.k3s_cluster_ipv6_pod_network is not none and arguments.k3s_cluster_ipv6_trusted_networks is not none)"
+              message: "Either all IPv6 related settings must be specified or none"
+      ayasuna__ingot__k8s__inputs__k3s_cluster_domain:
+        type: "str"
+        description: |
+          The domain of the K8s cluster.
+        required: true
+      ayasuna__ingot__k8s__inputs__k3s_cluster_ipv4_service_network:
+        type: "str"
+        description: "The IPv4 network for the K8s services of the cluster. Must be a /16 subnet."
+        default: null
+      ayasuna__ingot__k8s__inputs__k3s_cluster_ipv4_pod_network:
+        type: "str"
+        description: "The IPv4 network for the K8s pods running on the cluster. Must be a /16 subnet."
+        default: null
+      ayasuna__ingot__k8s__inputs__k3s_cluster_ipv4_trusted_networks:
+        type: "list"
+        description: |
+          The trusted IPv4 networks, defines the networks from which all IPv4 INPUT traffic is accepted.
+          Must at least contain the networks (or IPs) of the K8s nodes itself as they won't be able to communicate with each other otherwise.
+          The default is to allow requests from anywhere which should be acceptable IF the K8s nodes are not directly reachable via the internet. 
+          Note that regardless of this setting, IPv4 traffic received on the WAN interface that is FORWARDED to the IPv4 POD network is always accepted.
+        element: "str"
+        default:
+          - "0.0.0.0/0"
+      ayasuna__ingot__k8s__inputs__k3s_cluster_ipv6_service_network:
+        type: "str"
+        description: "The IPv6 network for the K8s services of the cluster. Must be a /112 subnet."
+        default: null
+      ayasuna__ingot__k8s__inputs__k3s_cluster_ipv6_pod_network:
+        type: "str"
+        description: "The IPv6 network for the K8s pods running on the cluster. Must be a /56 subnet."
+        default: null
+      ayasuna__ingot__k8s__inputs__k3s_cluster_ipv6_trusted_networks:
+        type: "list"
+        description: |
+          The trusted IPv6 networks, defines the networks from which all IPv6 INPUT traffic is accepted.
+          Must at least contain the networks (or IPs) of the K8s nodes itself as they won't be able to communicate with each other otherwise.
+          The default is to allow requests from anywhere which should be acceptable IF the K8s nodes are not directly reachable via the internet. 
+          Note that regardless of this setting, IPv6 traffic received on the WAN interface that is FORWARDED to the IPv6 POD network is always accepted.
+        element: "str"
+        default:
+          - "::/0"
+      ayasuna__ingot__k8s__inputs__k3s_cluster_flannel_backend:
+        type: "str"
+        description: "The flannel backend to use"
+        required: true
+        choices:
+          - "vxlan"
+          - "wireguard"
+      ayasuna__ingot__k8s__inputs__k3s_cluster_token:
+        type: "str"
+        description: "The token nodes can use to join the cluster (short format, see https://docs.k3s.io/cli/token for more information)"
+        required: true
+      ayasuna__ingot__k8s__inputs__k3s_cluster_bootstrap_node_ip:
+        type: "str"
+        description: |
+          The IPv4 (ayasuna__ingot__k8s__inputs__k3s_node_ipv4_ip) or IPv6 (ayasuna__ingot__k8s__inputs__k3s_node_ipv6_ip) IP
+          of the node responsible for bootstrapping the cluster.
+        required: true
+  network:
+    short_description: "The network hook"
+    context: *default_context
+    options: *default_options
+  final:
+    short_description: "The final hook"
+    context: *default_context
+    options: *default_options
+  test:
+    short_description: "The test hook"
+    context: *default_context
+    options: *default_options
+    
+

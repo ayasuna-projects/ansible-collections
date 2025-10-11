@@ -1,0 +1,17 @@
+- name: "[Install] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['install']}}"
+  register: ayasuna__ingot__rescue__privates__arguments
+  tags:
+    - "ayasuna__ingot__rescue"
+    - "ayasuna__ingot__rescue@install"
+
+- name: "[Install] Including tasks from role 'ayasuna.utilities.host' to configure packages"
+  ansible.builtin.include_role:
+    name: "ayasuna.utilities.host"
+    tasks_from: "packages.yml"
+  tags:
+    - "ayasuna__ingot__rescue"
+    - "ayasuna__ingot__rescue@install"
+  vars:
+    ayasuna__utilities__host__inputs__packages: []

@@ -1,0 +1,16 @@
+{% set prepared_arguments = ayasuna__ingot__k8s__privates__arguments.prepared %}
+
+[NetDev]
+Name=wan0
+Kind=bond
+MTUBytes={{ prepared_arguments.wan_mtu }}
+
+{%+ if prepared_arguments.wan_mac is not none +%}
+    MACAddress={{ prepared_arguments.wan_mac }}
+{%+ endif +%}
+
+[Bond]
+Mode=active-backup
+PrimaryReselectPolicy=failure
+MIIMonitorSec=1s
+FailOverMACPolicy={{ 'none' if prepared_arguments.wan_mac is not none else 'active' }}

@@ -1,0 +1,256 @@
+argument_specs:
+  deploy:
+    short_description: "Deploys an ingot"
+    context:
+      prefixes:
+        - "ayasuna__utilities__ingot__inputs__"
+    options:
+      ayasuna__utilities__ingot__inputs__source_ingot:
+        description: "The path to the ingot (squashfs image) to deploy"
+        type: "str"
+        required: true
+      ayasuna__utilities__ingot__inputs__source_arguments:
+        description: |
+          The arguments to "call" the hooks (e.g. "local", "network", "final") of the ingot with when 
+          the ingot it booted.
+        type: "dict"
+        required: true
+      ayasuna__utilities__ingot__inputs__target_device_serial:
+        description: "The serial number of the block device to use. Mutually exclusive with 'ayasuna__utilities__ingot__inputs__target_device_path'"
+        type: "str"
+        default: null
+        context:
+          rules:
+            - expression: "(arguments.target_device_serial is defined and arguments.target_device_path is defined) and ((arguments.target_device_serial is not none and arguments.target_device_path is none) or (arguments.target_device_serial is none and arguments.target_device_path is not none))"
+              message: "Either the serial number or path of the target device must be specified but not both"
+      ayasuna__utilities__ingot__inputs__target_device_path:
+        description: "The path of the block device to use. Mutually exclusive with 'ayasuna__utilities__ingot__inputs__target_device_serial'"
+        type: "str"
+        default: null
+      ayasuna__utilities__ingot__inputs__target_partitions_boot_size:
+        description: "The size of the partition in MiB. Will only have an effect if the partition does not exist yet"
+        type: "int"
+        default: 512
+      ayasuna__utilities__ingot__inputs__target_partitions_deployment_size:
+        description: "The size of the partition in MiB. Will only have an effect if the partition does not exist yet"
+        type: "int"
+        default: 24576
+      ayasuna__utilities__ingot__inputs__target_partitions_deployment_history:
+        description: "The maximum number of previous deployments to keep"
+        type: "int"
+        default: 10
+  build:
+    short_description: | 
+      Builds a new ingot via packer and QEMU.
+      An ingot is a squashfs image of a debian filesystem that follows some additional contracts. 
+      The filesystem for example contains some well-defined systemd services that are executed during every boot to configure the host.
+    context:
+      prefixes:
+        - "ayasuna__utilities__ingot__inputs__"
+    options:
+      ayasuna__utilities__ingot__inputs__build_operating_system:
+        description: "The operating system to install"
+        type: "str"
+        required: true
+        choices:
+          - "debian:13-amd64"
+      ayasuna__utilities__ingot__inputs__build_users_root_password:
+        description: "The password to set for the root user during the installation"
+        type: "str"
+        required: true
+      ayasuna__utilities__ingot__inputs__build_ansible_collections:
+        description: |
+          The ansible collections to install and copy into the ingot.
+          The collections will be installed by calling 'ansible-galaxy collection install' on the host that runs the 
+          build process.
+          This parameter provides a subset of the options outlined at https://docs.ansible.com/ansible/latest/collections_guide/collections_installing.html#install-multiple-collections-with-a-requirements-file.
+        type: "list"
+        required: true
+        elements: "dict"
+        options:
+          type:
+            description: "Determines what the 'name' represents and how to interpret it"
+            type: "str"
+            required: true
+            choices:
+              - "file"
+              - "galaxy"
+              - "git"
+              - "url"
+              - "dir"
+              - "subdirs"
+          name:
+            description: | 
+              The name of the collection(s) to install.
+              The format and meaning depends on the type (e.g. it might be an URL or path)
+            type: "str"
+            required: true
+          version:
+            description: "The version of the collection(s) to install"
+            type: "str"
+            required: false
+      
+      ayasuna__utilities__ingot__inputs__build_ansible_role_fqn:
+        description: |
+          The fully qualified name of the role to call.
+          A couple of hooks (tasks) are called on this role, whenever a new stage is reached:
+          - install.yml:
+              Called exactly once after the "install" stage has been reached during the build of the ingot. 
+              The "install" stage is reached after the OS and the systemd services,
+              that call the other hooks during boot, have been installed.
+              As this stage is part of the built process no deployment arguments are available.
+              Intended to be used to install/download software and setup environment agnostic configuration.
+          - local.yml:
+              Called during every boot after the ingot has been built and after the root filesystem has
+              been mounted but before any network configuration has been applied to the system.
+              Everything that can be setup without any existing network configuration should be setup here 
+              e.g. the firewall and the network configuration.
+
+              Incomplete systemd unit file definition of the service calling this hook:
+                After=local-fs.target cryptsetup.target systemd-udevd.service systemd-sysctl.service systemd-tmpfiles-setup.service
+                Before=sysinit.target, nftables.service, systemd-resolved.service
+          - network.yml:
+              Called during every boot after the ingot has been built after the network manager 
+              has been started and after the "local.yml" hook has completed. 
+              Note that while the network manager has started at this point the state of the network is 
+              not really defined.
+
+             Incomplete systemd unit file definition of the service calling this hook:
+                After=ingot-local.service, systemd-networkd.service, network.target
+          - final.yml:
+              Called at the end of every boot after the ingot has been built and after the "network.yml"
+              hook has completed.
+              At this point the system is considered fully booted.
+
+             Incomplete systemd unit file definition of the service calling this hook:
+                After=ingot-network.service
+          - test.yml:
+              Called exactly once within the test VM after the "final.yml" hook has completed to test
+              the build ingot.
+              The ingot will only be considered successfully built if all boot hooks and this hook
+              complete successfully.
+          The role must implement *all* hooks.
+          All hooks should whenever possible use systemd to configure the system e.g. 
+          if the deployment arguments indicate that a specific service should be running the service 
+          should be integrated (possibly transiently) with systemd by creating a *.service file.
+          The root filesystem ("/") will be mounted as an overlayfs that uses tmpfs for the upper 
+          filesystem, so all changes applied by the boot hooks to the root filesystem are temporary.
+          To persist data across reboots the role must manually mount a separate drive (if data needs 
+          to be persisted across reboots) or use the /var/lib/ingot/data/ directory. 
+        type: "str"
+        required: true
+      ayasuna__utilities__ingot__inputs__build_ansible_role_arguments:
+        description: |
+          The static arguments/variables to "call" *all* hooks of the role with.
+          If an argument is also set via the deployment arguments the deployment argument/variable will take precedence,
+          that being said it is generally not recommended to overwrite arguments/variables this way 
+          as the deployment arguments are NOT used/available during the build process.
+        type: "dict"
+        default: { }
+      ayasuna__utilities__ingot__inputs__test_arguments:
+        description: |
+          The arguments to "call" the hooks (e.g. "local", "network", "final") of the ingot with when 
+          testing it.
+        type: "dict"
+        required: true
+      ayasuna__utilities__ingot__inputs__test_ssh_ip:
+        description: "The IP to connect to"
+        type: "str"
+        required: true
+      ayasuna__utilities__ingot__inputs__test_ssh_port:
+        description: "The port to connect to"
+        type: "int"
+        required: true
+      ayasuna__utilities__ingot__inputs__test_ssh_username:
+        description: "The username to use"
+        type: "str"
+        required: true
+      ayasuna__utilities__ingot__inputs__test_ssh_private_key:
+        description: "The private key to use"
+        type: "str"
+        required: true
+      ayasuna__utilities__ingot__inputs__test_interfaces:
+        description: "The network interfaces to add to the test VM"
+        type: "list"
+        required: true
+        element: "dict"
+        options:
+          ipv4_cidr:
+            description: |
+              The IPv4 CIDR, the prefix-length/subnet/network must be /24.
+              The VM can obtain IPs via DHCP, if it does it'll get the IPs beginning with "P.R.E.15".
+              The VM may also statically assign its IPs in this case IPs above "P.R.E.100" should be used to not conflict with the DHCP server.
+              
+              Set to 'null' if no IPv4 network should be setup for the interface, in this case the VM 
+              won't be able to communicate with external (IPv4) services via this interface.
+            type: "str"
+            default: null
+          ipv6_cidr:
+            description: |
+              The IPv6 CIDR, the prefix-length/subnet/network must be /64.
+              The VM can generate an IP in this network via SLAAC or set it statically (note that addresses up to "prefix::1000" are reserved).
+              
+              Set to 'null' if no IPv6 network should be setup for the interface, in this case the VM 
+              won't be able to communicate with external (IPv6) services via this interface.
+            type: "str"
+            default: null
+          mac:
+            description: "The MAC address of the interface to add to the VM"
+            type: "str"
+            required: true
+      ayasuna__utilities__ingot__inputs__test_disks_root_serial:
+        description: "The serial number the root disk should have"
+        type: "str"
+        default: "TD0000001"
+      ayasuna__utilities__ingot__inputs__test_disks_additional:
+        description: "The additional disks to add to the VM"
+        type: "list"
+        required: true
+        element: "dict"
+        options:
+          size:
+            description: "Size of the disk in MB"
+            type: "int"
+            required: true
+          serial:
+            description: "The serial number the disk should have"
+            type: "str"
+            required: true
+      ayasuna__utilities__ingot__inputs__qemu_accelerator:
+        description: "The QEMU accelerator to use"
+        type: "str"
+        default: "kvm"
+        choices:
+          - "kvm"
+          - "tcg"
+      ayasuna__utilities__ingot__inputs__qemu_headless:
+        description: "Whether to run QEMU in headless mode"
+        type: "bool"
+        default: true
+      ayasuna__utilities__ingot__inputs__qemu_efi_code:
+        description: "The path to the firmware code/implementation. Will be copied to a temp directory before it is used"
+        type: "str"
+        default: "/usr/share/OVMF/OVMF_CODE_4M.fd"
+      ayasuna__utilities__ingot__inputs__qemu_efi_vars:
+        description: "The path to the firmware vars file (The file in which the *mutable* UEFI variables are stored). Will be copied to a temp directory before it is used"
+        type: "str"
+        default: "/usr/share/OVMF/OVMF_VARS_4M.fd"
+      ayasuna__utilities__ingot__inputs__working_directory:
+        description: |
+          The working directory to use.
+          Temporary files required by the build process will be created in this directory. 
+          The build process expects exclusive access to the directory, the directory however may be reused 
+          for consecutive builds (with the same configuration).
+        type: "str"
+        required: true
+        context:
+          rules:
+            - expression: "arguments.working_directory.endswith('/')"
+              message: "The working directory must end with a '/'"
+      ayasuna__utilities__ingot__inputs__target_file:
+        description: |
+          The path to which the created ingot is copied after a successful test. 
+          The containing directory must already exist.
+        type: "str"
+        required: true
+        

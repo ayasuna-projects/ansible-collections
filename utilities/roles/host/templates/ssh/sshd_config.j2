@@ -1,0 +1,30 @@
+Port 22
+AddressFamily any
+ListenAddress 0.0.0.0
+ListenAddress ::
+
+HostKey {{ ayasuna__utilities__host__privates__arguments.prepared.host_key_directory }}/ssh_host_rsa_key
+HostKey {{ ayasuna__utilities__host__privates__arguments.prepared.host_key_directory }}/ssh_host_ecdsa_key
+HostKey {{ ayasuna__utilities__host__privates__arguments.prepared.host_key_directory }}/ssh_host_ed25519_ke
+
+LoginGraceTime 2m
+PermitRootLogin no
+StrictModes yes
+MaxAuthTries 6
+MaxSessions 10
+
+AuthorizedKeysFile	.ssh/authorized_keys
+
+PubkeyAuthentication yes
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+KerberosAuthentication no
+GSSAPIAuthentication no
+PermitEmptyPasswords no
+
+UsePAM yes
+X11Forwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+
+Subsystem sftp	/usr/lib/openssh/sftp-server

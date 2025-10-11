@@ -1,0 +1,51 @@
+argument_specs:
+  main:
+    short_description: "Performs udevadm operations like reloading the UDEV ruleset"
+    context:
+      prefixes:
+        - "ayasuna__utilities__udevadm__inputs__"
+    options:
+      ayasuna__utilities__udevadm__inputs__reload:
+        description: "Whether to reload the UDEV ruleset"
+        type: "bool"
+        default: true
+      ayasuna__utilities__udevadm__inputs__trigger:
+        description: "The 'udevadm trigger' commands to execute to apply the UDEV ruleset changes"
+        type: "list"
+        default: []
+        elements: "dict"
+        options:
+          action:
+            description: "The event type to be triggered"
+            type: "str"
+            required: true
+            choices:
+              - "add"
+              - "remove"
+              - "change"
+              - "move"
+              - "online"
+              - "offline"
+              - "bind"
+              - "unbind"          
+          type:
+            description: "The type of device to trigger"
+            type: "str"
+            required: true
+            choices:
+              - "devices"
+              - "subsystems"
+          match_subsystem:
+            description: "Triggers events only for the devices matching the specified subsystem"
+            type: "str"
+            required: true
+            choices:
+              - "net"
+      ayasuna__utilities__udevadm__inputs__settle_timeout:
+        description: |
+          The timeout in seconds of the 'udevadm settle' command to wait for the UDEV event queue to become empty. 
+          Note that there is no guarantee that the UDEV event queue is empty after the timeout, if the queue is not 
+          this role will NOT fail.
+          If 0 no 'udevadm settle' will be executed. 
+        type: "int"
+        default: 30

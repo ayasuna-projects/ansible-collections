@@ -1,0 +1,50 @@
+{% set prepared_arguments = ayasuna__ingot__k8s__privates__arguments.prepared %}
+
+[Match]
+Name=wan0
+
+[Network]
+LLDP=no
+EmitLLDP=no
+DuplicateAddressDetection=ipv6
+LinkLocalAddressing=ipv6
+IPv6LinkLocalAddressGenerationMode=eui64
+IPv6AcceptRA={{ 'yes' if prepared_arguments.wan_accept_ra else 'no' }}
+IPv6SendRA=no
+IPv6PrivacyExtensions=no
+DNSDefaultRoute=yes
+LLMNR=no
+MulticastDNS=no
+DNSSEC=no
+DNSOverTLS=no
+DHCP={{ 'ipv4' if prepared_arguments.wan_dhcp else 'no' }}
+
+{%+ for ip in prepared_arguments.wan_ips +%}
+
+    Address={{ ip }}
+
+{%+ endfor +%}
+
+{%+ for nameserver in prepared_arguments.wan_nameservers +%}
+
+    DNS={{ nameserver }}
+
+{%+ endfor +%}
+
+{%+ for route in prepared_arguments.wan_routes +%}
+
+    [Route]
+    Table=main
+    Destination={{ route.to }}
+    Gateway={{ route.via }}
+    Type=unicast
+    Protocol=static
+    Metric=128
+
+    {%+ if ":" not in route.to +%}
+
+        Scope=global
+
+    {%+ endif +%}
+    
+{%+ endfor +%}

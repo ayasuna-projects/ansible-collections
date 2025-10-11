@@ -1,0 +1,82 @@
+{% set prepared_arguments = ayasuna__utilities__ingot__privates__build_arguments.prepared %}
+
+packer {
+  required_plugins {
+    qemu = {
+      version = "~> 1"
+      source  = "github.com/hashicorp/qemu"
+    }
+  }
+}
+
+source "qemu" "default" {
+  output_directory       = "{{ prepared_arguments.working_directory }}/vm/build/output/"
+  iso_url                = "{{ prepared_arguments.working_directory }}/vm/build/installer.iso"
+  # We can safely use "none" here as we already verified the ISO checksum via ansible
+  iso_checksum           = "none"
+  accelerator            = "{{ prepared_arguments.qemu_accelerator }}"
+  headless               = "{{ prepared_arguments.qemu_headless | ternary('true', 'false') }}"
+  machine_type           = "q35"
+  cpus                   = 4
+  memory                 = 6144
+  disk_interface         = "virtio"
+  disk_size              = "6G"
+  disk_image             = false
+  use_backing_file       = false
+  format                 = "raw"
+  http_directory         = "{{ prepared_arguments.working_directory }}/vm/build/http/"
+  boot_wait              = "10s"
+  boot_keygroup_interval = "500ms"
+  boot_key_interval      = "250ms"
+  boot_command = [
+    "<down><down><enter>",
+    "<down><down><down><down><down><enter>",
+    "{{ "<wait3m>" if prepared_arguments.qemu_accelerator == "tcg" else "<wait2m>" }}",
+    {% raw %}
+    "http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg<enter>",
+    {% endraw %}
+  ]
+  net_device       = "virtio-net"
+  communicator     = "ssh"
+  ssh_port         = 22
+  ssh_username     = "root"
+  ssh_password     = "{{ prepared_arguments.build_users_root_password }}"
+  ssh_timeout      = "30m"
+  shutdown_command = "systemctl poweroff"
+  # This option specifies the name of the image file to create
+  vm_name          = "build.img" 
+
+  efi_boot          = true
+  efi_firmware_code = "{{ prepared_arguments.working_directory }}/vm/efi.code.fd"
+  efi_firmware_vars = "{{ prepared_arguments.working_directory }}/vm/build/efi.vars.fd"
+  # GRUB is configured to use the well-known default path /EFI/BOOT/ so we don't really use the EFI vars and therefore drop them (we have no good way to copy them to the target machines anyway)
+  efi_drop_efivars  = true
+}
+
+build {
+  sources = ["source.qemu.default"]
+
+  provisioner "shell" {
+    inline = [
+      # Remove the target directory if it exists to make sure we're starting with a clean/empty directory
+      "rm -rf /etc/ansible/",
+      "mkdir -p /etc/ansible/",
+    ]
+  }
+  
+  provisioner "file" {
+    source = "{{ prepared_arguments.working_directory }}/vm/build/ansible/"
+    destination = "/etc/ansible/"
+    direction = "upload"
+  }
+  
+  # Set the correct file permission, we could do this within the playbook, however this will lead to warnings about 01.py not being accessible
+  provisioner "shell" {
+    inline = [
+      "chown -R root:root /etc/ansible/",
+      "chmod -R 755 /etc/ansible/",
+      "cd /etc/ansible/",
+      "ansible-playbook /etc/ansible/playbooks/install.yml",
+    ]
+  }
+}

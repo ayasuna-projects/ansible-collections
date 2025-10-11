@@ -1,0 +1,18 @@
+- name: "[Users] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['users']}}"
+  register: ayasuna__utilities__host__privates__arguments
+  tags:
+    - "ayasuna__utilities__host"
+    - "ayasuna__utilities__host@users"
+
+- name: "[Users] Including tasks from users/main.yml to configure users"
+  ansible.builtin.include_tasks:
+    file: "users/main.yml"
+    apply:
+      tags:
+        - "ayasuna__utilities__host"
+        - "ayasuna__utilities__host@users"
+  tags:
+    - "ayasuna__utilities__host"
+    - "ayasuna__utilities__host@users"

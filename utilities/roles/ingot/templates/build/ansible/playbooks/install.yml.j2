@@ -1,0 +1,829 @@
+- name: "Install"
+  connection: "local"
+  hosts: "localhost"
+  serial: 1
+  gather_facts: false
+  tasks:
+    - name: "[Install] Configuring kernel parameters via sysctl"
+      ansible.posix.sysctl:
+        name: "{% raw %}{{ install__privates__sysctl.name }}{% endraw %}"
+        value: "{% raw %}{{ install__privates__sysctl.value }}{% endraw %}"
+        state: "present"
+        # The systemd-sysctl service does not apply the default /etc/sysctl.conf file => we have to use/create one in /etc/sysctl.d/*
+        sysctl_file: "/etc/sysctl.d/10-ingot.conf"
+      loop:
+        # Treat oopses as full-blown kernel panics
+        - name: "kernel.panic_on_oops"
+          value: "1"
+        # Restart the system after 30 seconds after a kernel panic which should give any potential running monitoring software enough time to 
+        # log the error. 
+        - name: "kernel.panic"
+          value: "30"
+        # Enable IPv4 and IPv6 forwarding by default => let the firewall decide what to do with such traffic
+        - name: "net.ipv4.conf.default.forwarding"
+          value: "1"
+        - name: "net.ipv4.conf.all.forwarding"
+          value: "1"
+        - name: "net.ipv6.conf.default.forwarding"
+          value: "1"
+        - name: "net.ipv6.conf.all.forwarding"
+          value: "1"
+        # Never accept redirects. As we enabled forwarding, this should be the default anyway; but to be explicit, we're setting it here anyway
+        - name: "net.ipv4.conf.all.accept_redirects"
+          value: "0"
+        - name: "net.ipv4.conf.default.accept_redirects"
+          value: "0"
+        - name: "net.ipv6.conf.all.accept_redirects"
+          value: "0"
+        - name: "net.ipv6.conf.default.accept_redirects"
+          value: "0"
+        # Don't send redirects by default
+        - name: "net.ipv4.conf.all.send_redirects"
+          value: "0"
+        - name: "net.ipv4.conf.default.send_redirects"
+          value: "0"
+        # Don't accept packets with the SRR option https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/6/html/security_guide/sect-security_guide-server_security-disable-source-routing
+        - name: "net.ipv4.conf.all.accept_source_route"
+          value: "0"
+        - name: "net.ipv4.conf.default.accept_source_route"
+          value: "0"
+        - name: "net.ipv6.conf.all.accept_source_route"
+          value: "0"
+        - name: "net.ipv6.conf.default.accept_source_route"
+          value: "0"
+
+      loop_control:
+        loop_var: "install__privates__sysctl"
+        index_var: "install__privates__sysctl_index"
+
+    - name: "[Install] Installing required packages"
+      ansible.builtin.apt:
+        name:
+          # This allows us to use the service/source 'resolve' within the nsswitch.conf which is recommended to be used instead of the default 'dns' service/source in case systemd-resolved is used.
+          - "libnss-resolve"
+          - "libnss-myhostname"
+          - "systemd-resolved"
+          - "nftables"
+          # "parted" is actually somewhat optional as it is only required for the initial setup which may not even happen from a booted ingot.
+          # We installed parted anyway because there is no real drawback to having it installed on every system.
+          - "parted"
+          # We need "initramfs-tools" because this is what allows us to customize the initramfs. 
+          # Mainly here to be explicit about it as it should already be installed
+          - "initramfs-tools"
+          # "dosfstools" is needed because otherwise our custom initramfs boot script won't be able to check FAT32 filesystems
+          - "dosfstools"
+          # "e2fsprogs" is needed for the initial setup and to ensure "fsck.ext4" exists so that our custom initramfs is able to check EXT4 fileysystems
+          - "e2fsprogs"
+          # "grub-efi-amd64" must be installed so that every deployment is able to update the GRUB bootloader installation.
+          - "grub-efi-amd64"
+          - "chrony"
+        state: "present"
+        update_cache: true
+        force_apt_get: true
+
+    # 10.0.2.3 is the default IP of the DNS server that is set up by QEMU when using user mode networking. 
+    # See https://www.qemu.org/docs/master/system/devices/net.html for more info.
+    - name: "[Install] Setting up systemd-resolved config for install hook"
+      ansible.builtin.copy:
+        content: |
+          [Resolve]
+          FallbackDNS=10.0.2.3
+          LLMNR=no
+          MulticastDNS=no
+          DNSSEC=no
+          DNSOverTLS=no
+          Cache=no-negative
+          DNSStubListener=yes
+          ReadEtcHosts=yes
+        dest: "/etc/systemd/resolved.conf"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    - name: "[Install] Replacing sources/services of 'hosts' database in '/etc/nsswitch.conf'"
+      ansible.builtin.lineinfile:
+        path: "/etc/nsswitch.conf"
+        state: "present"
+        insertafter: "EOF"
+        regexp: "^hosts:"
+        line: "hosts:          resolve [!UNAVAIL=return] files myhostname dns"
+
+    # We have to restart/start the systemd-resolved service to ensure our new config is in effect without restarting the service DNS resolution during the install hook might fail because
+    # systemd-resolved will have replaced /etc/resolv.conf with a stub configuration.
+    - name: "[Install] Enabling & restarting systemd-resolved.service"
+      ansible.builtin.systemd_service:
+        name: "systemd-resolved.service"
+        enabled: true
+        state: "restarted"
+        masked: false
+        daemon_reload: true
+
+    # Reset the systemd-resolved config again after restarting the service so that, by default, after the "install" hook DNS resolution is no longer possible 
+    # => The hooks are required to setup DNS resolution themselves. Similar to how they're required to setup the network interfaces themselves.
+    - name: "[Install] Resetting up systemd-resolved config"
+      ansible.builtin.copy:
+        content: |
+          [Resolve]
+          DNS=
+          Domains=
+          FallbackDNS=
+          LLMNR=no
+          MulticastDNS=no
+          DNSSEC=no
+          DNSOverTLS=no
+          Cache=no-negative
+          DNSStubListener=yes
+          ReadEtcHosts=yes
+        dest: "/etc/systemd/resolved.conf"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    - name: "[Install] Enabling systemd-networkd.service"
+      ansible.builtin.systemd_service:
+        name: "systemd-networkd.service"
+        enabled: true
+        masked: false
+        daemon_reload: true
+
+    - name: "[Install] Disabling networking.service"
+      ansible.builtin.systemd_service:
+        name: "networking.service"
+        masked: true
+        enabled: false
+        daemon_reload: true
+
+    - name: "[Install] Updating /etc/network/interfaces"
+      ansible.builtin.copy:
+        dest: "/etc/network/interfaces"
+        content: |
+          # DO NOT EDIT
+          # Networking is managed by "systemd-networkd"
+        force: true
+        mode: "0644"
+        owner: "root"
+        group: "root"
+
+    - name: "[Install] Ensuring directory '/etc/systemd/system/nftables.service.d/' exists"
+      ansible.builtin.file:
+        path: "/etc/systemd/system/nftables.service.d/"
+        recurse: false
+        state: "directory"
+        mode: "0755"
+        owner: "root"
+        group: "root"
+
+    # The nftables service will by default, when stopped, flush all firewall rules which might lead to a situation
+    # during shutdown where the interfaces are still up and configured (systemd-networkd doesn't tear down interfaces when it is stopped)
+    # but no firewall rules are present anymore.
+    # To make sure that doesn't happen, we remove the 'ExecStop=' command from the nftables service.
+    - name: "[Install] Setting up '/etc/systemd/system/nftables.service.d/override.conf'"
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/nftables.service.d/override.conf"
+        content: |
+          [Service]
+          ExecStop=
+        force: true
+        mode: "0644"
+        owner: "root"
+        group: "root"
+
+    - name: "[Install] Enabling nftables.service"
+      ansible.builtin.systemd_service:
+        name: "nftables.service"
+        enabled: true
+        masked: false
+        daemon_reload: true
+
+    - name: "[Install] Setting up nftables config"
+      ansible.builtin.copy:
+        content: |
+          #!/usr/sbin/nft -f
+
+          flush ruleset
+
+          table inet HOST_INIT {
+
+          	chain HOST_INIT_INPUT {
+          		type filter hook input priority 0; policy accept; 
+          	}
+
+          	chain HOST_INIT_FORWARD {
+          		type filter hook forward priority 0; policy drop; 
+          	}
+
+          	chain HOST_INIT_OUTPUT {
+          		type filter hook output priority 0; policy accept;
+          	}
+
+          }
+        dest: "/etc/nftables.conf"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    # If we're executing this playbook the SSH service should already be enabled & started but to be explicit about it, we enable it here anyway 
+    - name: "[Install] Enabling ssh.service"
+      ansible.builtin.systemd_service:
+        name: "ssh.service"
+        enabled: true
+        masked: false
+        daemon_reload: true
+
+    - name: "[Install] Setting up SSH service config"
+      ansible.builtin.copy:
+        content: |
+          Port 22
+          AddressFamily any
+          ListenAddress 0.0.0.0
+          ListenAddress ::
+
+          LoginGraceTime 2m
+          PermitRootLogin no
+          StrictModes yes
+          MaxAuthTries 6
+          MaxSessions 10
+
+          AuthorizedKeysFile	.ssh/authorized_keys
+
+          PubkeyAuthentication yes
+          PasswordAuthentication no
+          ChallengeResponseAuthentication no
+          KerberosAuthentication no
+          GSSAPIAuthentication no
+          PermitEmptyPasswords no
+
+          UsePAM yes
+          X11Forwarding no
+          PrintMotd no
+          AcceptEnv LANG LC_*
+
+          Subsystem sftp	/usr/lib/openssh/sftp-server
+        dest: "/etc/ssh/sshd_config"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+        
+    - name: "[Install] Enabling chrony.service"
+      ansible.builtin.systemd_service:
+        name: "chrony.service"
+        enabled: true
+        masked: false
+        daemon_reload: true
+
+    - name: "[Install] Setting up chrony config"
+      ansible.builtin.copy:
+        content: |
+          # Welcome to the chrony configuration file. See chrony.conf(5) for more
+          # information about usable directives.
+          
+          # Include configuration files found in /etc/chrony/conf.d.
+          confdir /etc/chrony/conf.d
+        
+          # Use Debian vendor zone.
+          pool 2.debian.pool.ntp.org iburst
+        
+          # Use NTP sources found in /etc/chrony/sources.d.
+          sourcedir /etc/chrony/sources.d
+        
+          # This directive specify the location of the file containing ID/key pairs for
+          # NTP authentication.
+          keyfile /etc/chrony/chrony.keys
+                
+          # Log files location.
+          logdir /var/log/chrony
+        
+          # Stop bad estimates upsetting machine clock.
+          maxupdateskew 100.0
+
+          # Store UTC time on the RTC
+          rtconutc
+        
+          # This directive enables kernel synchronisation (every 11 minutes) of the
+          # real-time clock. Note that it can't be used along with the 'rtcfile' directive.
+          rtcsync
+        
+          # Step the system clock instead of slewing it if the adjustment is larger than
+          # one second, but only in the first three clock updates.
+          makestep 1 3
+        
+          # Get TAI-UTC offset and leap seconds from the system tz database.
+          # This directive must be commented out when using time sources serving
+          # leap-smeared time.
+          leapsectz right/UTC
+        dest: "/etc/chrony/chrony.conf"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    # We don't need the tmp.mount as the root fs is already an overlayfs that uses tmpfs for its upper layer
+    - name: "[Install] Disabling tmp.mount"
+      ansible.builtin.systemd_service:
+        name: "tmp.mount"
+        masked: true
+        enabled: false
+        daemon_reload: true
+
+    # TODO: Should we also order this service after nss-user-lookup.target?
+    - name: "[Install] Setting up ingot-local service"
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=The ingot-local stage service
+          DefaultDependencies=no
+          Conflicts=shutdown.target 
+          After=local-fs.target cryptsetup.target systemd-udevd.service systemd-sysctl.service systemd-tmpfiles-setup.service
+          Before=sysinit.target nftables.service systemd-resolved.service chrony.service shutdown.target
+          Wants=nftables.service systemd-resolved.service local-fs.target cryptsetup.target systemd-udevd.service systemd-sysctl.service systemd-tmpfiles-setup.service chrony.service
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/ansible-playbook /etc/ansible/playbooks/local.yml
+          RemainAfterExit=yes
+          StandardOutput=journal+console
+
+          [Install]
+          WantedBy=sysinit.target
+        dest: "/etc/systemd/system/ingot-local.service"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    - name: "[Install] Enabling ingot-local.service"
+      ansible.builtin.systemd_service:
+        name: "ingot-local.service"
+        enabled: true
+        masked: false
+        daemon_reload: true
+        state: "stopped"
+
+    # NOTE: We don't add a Wants= dependency to network.target because it is a passive target that should only be pulled in by the provider (which should be systemd-networkd in our case)
+    - name: "[Install] Setting up ingot-network service"
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=The ingot-network stage service
+          DefaultDependencies=yes
+          Wants=ingot-local.service systemd-networkd.service
+          After=ingot-local.service systemd-networkd.service network.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/ansible-playbook /etc/ansible/playbooks/network.yml
+          RemainAfterExit=yes
+          StandardOutput=journal+console
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: "/etc/systemd/system/ingot-network.service"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    - name: "[Install] Enabling ingot-network.service"
+      ansible.builtin.systemd_service:
+        name: "ingot-network.service"
+        enabled: true
+        masked: false
+        daemon_reload: true
+        state: "stopped"
+
+    - name: "[Install] Setting up ingot-final service"
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=The ingot-final stage service
+          DefaultDependencies=yes
+          Wants=ingot-network.service
+          After=ingot-network.service
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/ansible-playbook /etc/ansible/playbooks/final.yml
+          RemainAfterExit=yes
+          StandardOutput=journal+console
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: "/etc/systemd/system/ingot-final.service"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    - name: "[Install] Enabling ingot-final.service"
+      ansible.builtin.systemd_service:
+        name: "ingot-final.service"
+        enabled: true
+        masked: false
+        daemon_reload: true
+        state: "stopped"
+
+    # We're setting up an empty /etc/fstab because the initramfs boot script is responsible for creating the appropriate systemd *.mount files.
+    - name: "[Install] Setting up '/etc/fstab'"
+      ansible.builtin.copy:
+        content: |
+          # <file system> <mount point>   <type>  <options>       <dump>  <pass>
+        dest: "/etc/fstab"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    - name: "[Install] Setting up '/etc/initramfs-tools/modules'"
+      ansible.builtin.copy:
+        content: |
+          # The NLS modules provide character set encoding support. 
+          # 'cp437' and 'ascii' are required for FAT32. 
+          # 'utf8' is probably not necessary but as we expect basically everything to be utf8 encoded we add it here anyway. 
+          nls_cp437
+          nls_ascii
+          nls_utf8
+          vfat
+          ext4
+          squashfs
+          overlay
+        dest: "/etc/initramfs-tools/modules"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    - name: "[Install] Setting up '/etc/initramfs-tools/initramfs.conf'"
+      ansible.builtin.copy:
+        content: |
+          # Manual: https://manpages.debian.org/bullseye/initramfs-tools-core/initramfs.conf.5.en.html
+
+          # Just add most modules. Probably way overkill because we should only need 'ext4', 'squashfs' and 'overlay'
+          # which are in all likelyhood compiled into the kernel anyway.
+          MODULES=most
+
+          # We definitely want to use busybox, which saves us from adding *a lot* of utilities via a custom hook script to 
+          # the initramfs.
+          # In fact using busybox means we don't need a custom hook script at all.
+          BUSYBOX=y
+
+          KEYMAP=n
+
+          COMPRESS=gzip
+          COMPRESSLEVEL=3
+
+          RUNSIZE=10%
+
+          # BOOT is somewhat tricky, while it *is* documented it is not clearly documented whether custom values are allowed.
+          # However the 'https://manpages.debian.org/buster/initramfs-tools-core/initramfs-tools.7.en.html#BOOT_SCRIPTS' section (vagely) suggests that custom boot scripts
+          # may be placed in the /etc/initramfs-tools/scripts/. 
+          BOOT=ingot
+
+          # The following two variables are only used for NFS boot according to the documentation which we don't use (see the BOOT= variable).
+          # => So just leave them at their default value
+          DEVICE=
+          NFSROOT=auto
+
+          # The next variable, according to the documentation, is only used for LOCAL boot which again we don't use (see the BOOT= variable).
+          # However according to my observations this will also (maybe even primarily) determine which 'fsck' binaries to include in the initramfs this is because without specifying this 
+          # variable the following warning appears when building the initramfs 'W: Couldn't identify type of root file system for fsck hook'. 
+          # As we want to perform an fsck on the 'deployment' & 'boot' partition before using it we're setting the type to 'ext4,vfat'. 
+          # This has the additional benefit of not being wrong per se (even though the rootfs type is squashfs) because the root.squashfs file resides
+          # on a ext4 formatted partition and the boot partition is formatted via FAT32
+          FSTYPE=ext4,vfat
+        dest: "/etc/initramfs-tools/initramfs.conf"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    - name: "[Install] Setting up '/etc/initramfs-tools/scripts/ingot'"
+      ansible.builtin.copy:
+        content: |
+          # This file represents the actual 'ingot' boot script which is responsible for mounting the rootfs and creating the overlayfs. 
+          # In contrast to the (builtin) boot scripts 'local' and 'nfs', the 'ingot' boot script DOES NOT support any user-defined hooks,
+          # it especially doesn't support user-defined boot script hooks of other boot scripts like 'local' (e.g. local-top, local-bottom, ...).
+          #
+          # To better understand what is going on a look into the following files provided by initramfs-tools might be helpful:
+          # - /usr/share/initramfs-tools/init // The initramfs init process script
+          # - /usr/share/initramfs-tools/scripts/local // The default 'local' boot script  
+          # - /usr/share/initramfs-tools/scripts/functions // Helper functions provided by initramfs-tools
+          # To debug the initramfs boot process the 'break=*' kernel parameter can be used e.g. 'break=bottom'. The available breakspoints can be found in the aforementioned files or in the documentation. 
+
+          # Aborts the boot process and drops into the initramfs (busybox) shell
+          # Parameters:
+          # - msg: The message to panic with
+          ingot_panic()
+          {
+            INGOT_PANIC__MSG="${1}"
+
+            panic "${INGOT_PANIC__MSG}"
+          }
+
+          # Logs a message via 'echo'
+          # Parameters:
+          # - msg: The message to log
+          ingot_log()
+          {
+            INGOT_LOG__MSG="${1}"
+
+            if [ "${quiet}" != "y" ]; then
+              echo "${INGOT_LOG__MSG}"
+            fi
+          }
+
+          # Performs an fsck on the given device with the given type and target directory
+          # Parameters:
+          # - type: The filesystem type e.g. ext4 
+          # - device: The device on which the filesystem can be found
+          # - target: The path into which the filesystem will later be mounted (only for diagnostics)
+          ingot_fsck()
+          {
+            INGOT_FSCK__TYPE="${1}"
+            INGOT_FSCK__DEVICE="${2}"
+            INGOT_FSCK__TARGET="${3}"
+            INGOT_FSCK__NAME="$(echo "${INGOT_FSCK__TARGET}" | tr "/" "-")"
+
+            # checkfs is currently part of the initramfs-tools/scripts/functions but it is not directly documented in the manual so that *might* change in the future
+            if type 'checkfs' 2>/dev/null | grep -q "function"; then
+              checkfs "${INGOT_FSCK__DEVICE}" "${INGOT_FSCK__NAME}" "${INGOT_FSCK__TYPE}"
+            else 
+              ingot_panic "Expected 'checkfs' function to be present but it is not. The functions provided by initramfs-tools have probably changed"
+            fi
+          }
+
+          # Waits for UDEV to settle
+          # Parameters:
+          # - timeout: The time in seconds to wait for the UDEV queue to become empty
+          ingot_wait_for_udev()
+          {
+            INGOT_WAIT_FOR_UDEV__TIMEOUT="${1}"
+
+            # wait_for_udev is currently part of the initramfs-tools/scripts/functions but it is not directly documented in the manual so that *might* change in the future
+            if type 'wait_for_udev' 2>/dev/null | grep -q "function"; then
+              wait_for_udev "${INGOT_WAIT_FOR_UDEV__TIMEOUT}"
+            else 
+              ingot_panic "Expected 'wait_for_udev' function to be present but it is not. The functions provided by initramfs-tools have probably changed"
+            fi
+          }
+
+          # Gets the device path e.g. /dev/sda1 for the device on which the filesystem with the given UUID can be found.
+          # The found device path is echoed, if not device could be found an empty string is echoed instead.
+          # - uuid: The UUID of the filesystem
+          ingot_get_device_by_fs_uuid() {
+            INGOT_GET_DEVICE_BY_FS__UUID="${1}"
+
+            INGOT_GET_DEVICE_BY_FS__RESULT="$(blkid -l -o device -t UUID="${INGOT_GET_DEVICE_BY_FS__UUID}")"
+            INGOT_GET_DEVICE_BY_FS__BLKID_RETURN_VALUE="${?}"
+
+            if [ "${INGOT_GET_DEVICE_BY_FS__BLKID_RETURN_VALUE}" = "0" ] && [ ! -z "${INGOT_GET_DEVICE_BY_FS__RESULT}" ]; then
+              echo "${INGOT_GET_DEVICE_BY_FS__RESULT}"
+            else
+              echo ""
+            fi
+          }
+
+          # Creates the 'target' directory if it doesn't yet exist.
+          # If the mkdir operation fails 'ingot_panic' will be called
+          # Parameters:
+          # - target: The target directory to create e.g. /tmp/my-dir
+          ingot_mkdir()
+          {
+            INGOT_MKDIR__TARGET="${1}"
+
+            if ! mkdir -p "${INGOT_MKDIR__TARGET}"; then
+              ingot_panic "Failed to create target directory '${INGOT_MKDIR__TARGET}'"
+            fi
+          }
+
+          # Mounts the given 'device' at 'target' with the given 'type' and 'options'.
+          # If the mount operation fails 'ingot_panic' will be called
+          # Parameters:
+          # - type: The mount type e.g. ext4
+          # - options: The mount options
+          # - device: The mount device e.g. /dev/sda1
+          # - target: The mount target e.g. /mnt/my-mount-dir
+          ingot_mount()
+          {
+            INGOT_MOUNT__TYPE="${1}"
+            INGOT_MOUNT__OPTIONS="${2}"
+            INGOT_MOUNT__DEVICE="${3}"
+            INGOT_MOUNT__TARGET="${4}"
+
+            if ! mount -t "${INGOT_MOUNT__TYPE}" -o "${INGOT_MOUNT__OPTIONS}" "${INGOT_MOUNT__DEVICE}" "${INGOT_MOUNT__TARGET}"; then
+              ingot_panic "Failed to mount '${INGOT_MOUNT__DEVICE}' at '${INGOT_MOUNT__TARGET}' with options '${INGOT_MOUNT__OPTIONS}' and type '${INGOT_MOUNT__TYPE}'"
+            fi
+          }
+
+          # Moves a mount from source to target.
+          # If the mount operation fails 'ingot_panic' will be called
+          # Parameters:
+          # - source: The source path
+          # - target: The target path
+          ingot_move_mount()
+          {
+            INGOT_MOVE_MOUNT__SOURCE="${1}"
+            INGOT_MOVE_MOUNT__TARGET="${2}"
+
+            if ! mount --move "${INGOT_MOVE_MOUNT__SOURCE}" "${INGOT_MOVE_MOUNT__TARGET}"; then
+              ingot_panic "Failed to move mount from '${INGOT_MOVE_MOUNT__SOURCE}' to '${INGOT_MOVE_MOUNT__TARGET}'"
+            fi
+          }
+
+          # Mounts the device partition with the filesystem identified by the given 'uuid' at 'target' with the given 'type'.
+          # If the mount operation fails 'ingot_panic' will be called
+          # Parameters:
+          # - type: The mount type e.g. ext4
+          # - uuid: The UUID of the filesystem to mount
+          # - target: The mount target e.g. /mnt/my-mount-dir
+          ingot_mount_device_partition()
+          {
+            INGOT_MOUNT_DEVICE_PARTITION__TYPE="${1}"
+            INGOT_MOUNT_DEVICE_PARTITION__UUID="${2}"
+            INGOT_MOUNT_DEVICE_PARTITION__TARGET="${3}"
+
+            ingot_log "ingot_mount_device_partition start"
+
+            for INGOT_MOUNT_DEVICE_PARTITION__ATTEMPT in $(seq "1" "29"); do
+
+              ingot_log "ingot_mount_device_partition attempting to mount filesystem with UUID '${INGOT_MOUNT_DEVICE_PARTITION__UUID}', attempt=${INGOT_MOUNT_DEVICE_PARTITION__ATTEMPT}"
+
+              ingot_wait_for_udev "10"
+
+              INGOT_MOUNT_DEVICE_PARTITION__DEVICE="$(ingot_get_device_by_fs_uuid "${INGOT_MOUNT_DEVICE_PARTITION__UUID}")"
+
+              if [ -z "${INGOT_MOUNT_DEVICE_PARTITION__DEVICE}" ]; then
+                if [ "${INGOT_MOUNT_DEVICE_PARTITION__ATTEMPT}" = "29" ]; then
+                  ingot_panic "Failed to mount device partition of filesystem with UUID '${INGOT_MOUNT_DEVICE_PARTITION__UUID}' after 30 attempts"
+                else 
+                  ingot_log "ingot_mount_device_partition could not (yet) find filesystem with UUID '${INGOT_MOUNT_DEVICE_PARTITION__UUID}', sleeping for 1 second then trying again"
+
+                  sleep "1"
+                  continue 
+                fi 
+              fi
+
+              ingot_fsck "${INGOT_MOUNT_DEVICE_PARTITION__TYPE}" "${INGOT_MOUNT_DEVICE_PARTITION__DEVICE}" "${INGOT_MOUNT_DEVICE_PARTITION__TARGET}"
+
+              ingot_mount "${INGOT_MOUNT_DEVICE_PARTITION__TYPE}" "rw,relatime" "${INGOT_MOUNT_DEVICE_PARTITION__DEVICE}" "${INGOT_MOUNT_DEVICE_PARTITION__TARGET}"
+
+              break 
+            done 
+
+            ingot_log "ingot_mount_device_partition end"
+          }
+
+          # Creates a new systemd.mount file at the given 'target' path
+          # Parameters:
+          # - type: The mount type e.g. ext4
+          # - options: The mount options
+          # - what: What to mount e.g. /dev/sda1
+          # - where: The mount target e.g. /mnt/my-mount-dir
+          # - target: The target path e.g. /etc/systemd/system/var-lib-ingot.mount 
+          # - lazy_unmount: The value for LazyUnmount (bool) e.g. 'yes' or 'no' 
+          ingot_create_systemd_mount_file()
+          {
+            INGOT_CREATE_SYSTEMD_MOUNT_FILE__TYPE="${1}"
+            INGOT_CREATE_SYSTEMD_MOUNT_FILE__OPTIONS="${2}"
+            INGOT_CREATE_SYSTEMD_MOUNT_FILE__WHAT="${3}"
+            INGOT_CREATE_SYSTEMD_MOUNT_FILE__WHERE="${4}"
+            INGOT_CREATE_SYSTEMD_MOUNT_FILE__TARGET="${5}"
+            INGOT_CREATE_SYSTEMD_MOUNT_FILE__LAZY_UNMOUNT="${6}"
+
+            echo "[Unit]"                                                       >> "${INGOT_CREATE_SYSTEMD_MOUNT_FILE__TARGET}"
+            echo "Before=local-fs.target"                                       >> "${INGOT_CREATE_SYSTEMD_MOUNT_FILE__TARGET}"
+
+            echo "[Mount]"                                                      >> "${INGOT_CREATE_SYSTEMD_MOUNT_FILE__TARGET}"
+            echo "What=${INGOT_CREATE_SYSTEMD_MOUNT_FILE__WHAT}"                >> "${INGOT_CREATE_SYSTEMD_MOUNT_FILE__TARGET}"
+            echo "Where=${INGOT_CREATE_SYSTEMD_MOUNT_FILE__WHERE}"              >> "${INGOT_CREATE_SYSTEMD_MOUNT_FILE__TARGET}"
+            echo "Type=${INGOT_CREATE_SYSTEMD_MOUNT_FILE__TYPE}"                >> "${INGOT_CREATE_SYSTEMD_MOUNT_FILE__TARGET}"
+            echo "Options=${INGOT_CREATE_SYSTEMD_MOUNT_FILE__OPTIONS}"          >> "${INGOT_CREATE_SYSTEMD_MOUNT_FILE__TARGET}"
+            echo "LazyUnmount=${INGOT_CREATE_SYSTEMD_MOUNT_FILE__LAZY_UNMOUNT}" >> "${INGOT_CREATE_SYSTEMD_MOUNT_FILE__TARGET}"
+          }
+
+          ingot_mountroot()
+          {
+            ingot_log "ingot_mountroot start"
+
+            if [ -z "${ROOT}" ]; then
+              ingot_panic "No 'root=' parameter has been specified. The 'root=' parameter must be part of the boot arguments"
+            fi
+
+            # We don't support readonly mounting of the rootfs because:
+            # - The rootfs is an overlayfs with a tmpfs upper_dir so changes are lost with a reboot anyway
+            # - As part of the ingot contract we need to add some files (mainly the config.yml) to the rootfs after creating it
+            if [ "${readonly}" = "y" ]; then
+              ingot_panic "Readonly mounting is not supported. The 'rw' parameter must be part of the boot arguments"
+            fi
+
+            INGOT_MOUNTROOT__BOOT_FS_UUID=$(echo "${ROOT}" | cut -d ":" -s -f "1")
+            INGOT_MOUNTROOT__DEPLOYMENT_FS_UUID=$(echo "${ROOT}" | cut -d ":" -s -f "2")
+            INGOT_MOUNTROOT__DATA_FS_UUID=$(echo "${ROOT}" | cut -d ":" -s -f "3")
+            INGOT_MOUNTROOT__DEPLOYMENT_VERSION=$(echo "${ROOT}" | cut -d ":" -s -f "4")
+            INGOT_MOUNTROOT__DEPLOYMENT_ID=$(echo "${ROOT}" | cut -d ":" -s -f "5")
+
+            if [ -z "${INGOT_MOUNTROOT__BOOT_FS_UUID}" ] || [ -z "${INGOT_MOUNTROOT__DEPLOYMENT_FS_UUID}" ] || [ -z "${INGOT_MOUNTROOT__DATA_FS_UUID}" ] || [ -z "${INGOT_MOUNTROOT__DEPLOYMENT_VERSION}" ] || [ "${INGOT_MOUNTROOT__DEPLOYMENT_VERSION}" != "v1" ] || [ -z "${INGOT_MOUNTROOT__DEPLOYMENT_ID}" ]; then
+              ingot_panic "The given 'root=' is not correctly formatted. Expected format: 'BOOT_FS_UUID:DEPLOYMENT_FS_UUID:DATA_FS_UUID:v1:DEPLOYMENT_ID'"
+            fi
+
+            # First create the (base) directory on the initramfs root into which we will mount the actual root filesystem overlay.
+            ingot_mkdir "/var/lib/ingot/"
+
+            # To keep things simple mount a tmpfs into the (base) directory.
+            # The primary purpose of this is to keep the overlay/{upper,work} directories on the same filesystem (which is required by overlayfs)
+            # This has also the added benefit that we can later just 'move' this mount to its new location which will automatically move all inner mounts with it. 	
+            ingot_mount "tmpfs" "size=50%,rw" "ingot-tmpfs" "/var/lib/ingot/"
+
+            ingot_mkdir "/var/lib/ingot/boot/"
+            ingot_mkdir "/var/lib/ingot/deployment/"
+            ingot_mkdir "/var/lib/ingot/data/"
+            ingot_mkdir "/var/lib/ingot/overlay/"
+            ingot_mkdir "/var/lib/ingot/overlay/lower/"
+            ingot_mkdir "/var/lib/ingot/overlay/upper/"
+            ingot_mkdir "/var/lib/ingot/overlay/work/"
+
+            ingot_mount_device_partition "vfat" "${INGOT_MOUNTROOT__BOOT_FS_UUID}" "/var/lib/ingot/boot/"
+            ingot_mount_device_partition "ext4" "${INGOT_MOUNTROOT__DEPLOYMENT_FS_UUID}" "/var/lib/ingot/deployment/"
+            ingot_mount_device_partition "ext4" "${INGOT_MOUNTROOT__DATA_FS_UUID}" "/var/lib/ingot/data/"
+
+            INGOT_MOUNTROOT__DEPLOYMENT_ROOTFS_PATH="/var/lib/ingot/deployment/v1/${INGOT_MOUNTROOT__DEPLOYMENT_ID}/root.squashfs"
+            INGOT_MOUNTROOT__DEPLOYMENT_ARGUMENTS_PATH="/var/lib/ingot/deployment/v1/${INGOT_MOUNTROOT__DEPLOYMENT_ID}/arguments.yml"
+
+            if [ ! -e "${INGOT_MOUNTROOT__DEPLOYMENT_ROOTFS_PATH}" ]; then
+              ingot_panic "The deployment with id '${INGOT_MOUNTROOT__DEPLOYMENT_ID}' seems to be broken because the file (${INGOT_MOUNTROOT__DEPLOYMENT_ROOTFS_PATH}) containing the root filesystem could not be found"
+            fi 
+
+            if [ ! -e "${INGOT_MOUNTROOT__DEPLOYMENT_ARGUMENTS_PATH}" ]; then
+              ingot_panic "The deployment with id '${INGOT_MOUNTROOT__DEPLOYMENT_ID}' seems to be broken because the file (${INGOT_MOUNTROOT__DEPLOYMENT_ARGUMENTS_PATH}) containing the arguments could not be found"
+            fi 
+
+            ingot_mount "squashfs" "ro,loop" "${INGOT_MOUNTROOT__DEPLOYMENT_ROOTFS_PATH}" "/var/lib/ingot/overlay/lower/"
+            ingot_mount "overlay" "rw,lowerdir=/var/lib/ingot/overlay/lower/,upperdir=/var/lib/ingot/overlay/upper/,workdir=/var/lib/ingot/overlay/work/" "ingot-overlayfs" "${rootmnt}"
+
+            cp "${INGOT_MOUNTROOT__DEPLOYMENT_ARGUMENTS_PATH}" "${rootmnt}/etc/ansible/inventories/01.yml"
+
+            ingot_create_systemd_mount_file "overlay" "rw,lowerdir=/var/lib/ingot/overlay/lower/,upperdir=/var/lib/ingot/overlay/upper/,workdir=/var/lib/ingot/overlay/work/" "ingot-overlayfs" "/" "${rootmnt}/etc/systemd/system/-.mount" "no"
+            ingot_create_systemd_mount_file "tmpfs" "size=50%,rw" "ingot-tmpfs" "/var/lib/ingot/" "${rootmnt}/etc/systemd/system/var-lib-ingot.mount" "yes"
+            ingot_create_systemd_mount_file "vfat" "rw,relatime" "UUID=${INGOT_MOUNTROOT__BOOT_FS_UUID}" "/var/lib/ingot/boot/" "${rootmnt}/etc/systemd/system/var-lib-ingot-boot.mount" "no"
+            ingot_create_systemd_mount_file "ext4" "rw,relatime" "UUID=${INGOT_MOUNTROOT__DEPLOYMENT_FS_UUID}" "/var/lib/ingot/deployment/" "${rootmnt}/etc/systemd/system/var-lib-ingot-deployment.mount" "yes"
+            ingot_create_systemd_mount_file "ext4" "rw,relatime" "UUID=${INGOT_MOUNTROOT__DATA_FS_UUID}" "/var/lib/ingot/data/" "${rootmnt}/etc/systemd/system/var-lib-ingot-data.mount" "no"
+            ingot_create_systemd_mount_file "squashfs" "ro,loop" "${INGOT_MOUNTROOT__DEPLOYMENT_ROOTFS_PATH}" "/var/lib/ingot/overlay/lower/" "${rootmnt}/etc/systemd/system/var-lib-ingot-overlay-lower.mount" "yes"
+
+            ingot_mkdir "${rootmnt}/var/lib/ingot/"
+
+            ingot_move_mount "/var/lib/ingot/" "${rootmnt}/var/lib/ingot/"
+
+            ingot_log "ingot_mountroot end"  
+          }
+
+          ingot_mount_top()
+          {
+            ingot_log "ingot_mount_top start"
+            ingot_log "ingot_mount_top end"  
+          }
+
+          ingot_mount_premount()
+          {
+            ingot_log "ingot_mount_premount start"
+            ingot_log "ingot_mount_premount end"
+          }
+
+          ingot_mount_bottom()
+          {
+            ingot_log "ingot_mount_bottom start"
+            ingot_log "ingot_mount_bottom end"
+          }
+
+          # Mount the root file system.  It should be overridden by all
+          # boot scripts.
+          mountroot()
+          {
+            ingot_mountroot
+          }
+
+          # Run /scripts/${boot}-top.  This should be overridden by all boot
+          # scripts.
+          mount_top()
+          {
+            ingot_mount_top
+          }
+
+          # Run /scripts/${boot}-premount.  This should be overridden by all boot
+          # scripts.
+          mount_premount()
+          {
+            ingot_mount_premount
+          }
+
+          # Run /scripts/${boot}-bottom.  This should be overridden by all boot
+          # scripts.
+          mount_bottom()
+          {
+            ingot_mount_bottom
+          }
+        dest: "/etc/initramfs-tools/scripts/ingot"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+
+    - name: "[Install] Updating initramfs"
+      ansible.builtin.shell:
+        cmd: "update-initramfs -u -k all"
+
+    # TODO: We should consider cleaning the image after the install.yml has run (e.g. removing unnecessary files from the /boot directory)
+    - name: "[Install] Including 'install.yml' tasks from role '{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.build_ansible_role_fqn }}'"
+      ansible.builtin.include_role:
+        name: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.build_ansible_role_fqn }}"
+        tasks_from: "install.yml"

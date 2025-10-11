@@ -1,0 +1,14 @@
+namespace: "ayasuna"
+name: "ingot"
+description: "Contains roles that can be used to build ingots"
+version: "1.0.0"
+readme: "README.md"
+repository: "https://github.com/ayasuna-projects/ansible-collections"
+dependencies: {}
+authors:
+  - "Philipp Schmalenbach"
+license:
+  - "MIT"
+tags:
+  - "ayasuna"
+  - "ingot"

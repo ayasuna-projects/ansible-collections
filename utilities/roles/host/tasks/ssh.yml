@@ -1,0 +1,18 @@
+- name: "[SSH] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['ssh']}}"
+  register: ayasuna__utilities__host__privates__arguments
+  tags:
+    - "ayasuna__utilities__host"
+    - "ayasuna__utilities__host@ssh"
+
+- name: "[SSH] Including tasks from ssh/main.yml to configure SSH service"
+  ansible.builtin.include_tasks:
+    file: "ssh/main.yml"
+    apply:
+      tags:
+        - "ayasuna__utilities__host"
+        - "ayasuna__utilities__host@ssh"
+  tags:
+    - "ayasuna__utilities__host"
+    - "ayasuna__utilities__host@ssh"

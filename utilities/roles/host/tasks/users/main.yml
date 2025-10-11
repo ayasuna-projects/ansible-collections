@@ -1,0 +1,6 @@
+- name: "[Users] Setting up configured users"
+  ansible.builtin.include_tasks:
+    file: "user/main.yml"
+  loop: "{{ ayasuna__utilities__host__privates__arguments.prepared.users }}"
+  loop_control:
+    loop_var: "ayasuna__utilities__host__privates__user"

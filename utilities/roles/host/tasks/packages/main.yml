@@ -1,0 +1,39 @@
+- name: "[Packages] Updating APT repositories"
+  ansible.builtin.apt:
+    update_cache: true
+    force_apt_get: true
+
+- name: "[Packages] Performing dist upgrade"
+  ansible.builtin.apt:
+    upgrade: "dist"
+    force_apt_get: true
+
+- name: "[Packages] Removing no longer needed APT packages"
+  ansible.builtin.apt:
+    autoremove: true
+    purge: true
+    force_apt_get: true
+
+- name: "[Packages] Installing default packages"
+  ansible.builtin.apt:
+    name:
+      - "openssh-server" # OpenSSH server should already be installed but to be explicit we leave it here anyway, the same goes for nftables
+      - "nftables"
+      - "sudo"
+      - "htop"
+      - "iotop"
+      - "nload"
+      - "parted"
+      - "iproute2"
+      - "dnsutils"
+      - "curl"
+      - "bash-completion"
+      - "grep"
+    state: "present"
+    force_apt_get: true
+
+- name: "[Packages] Installing custom packages"
+  ansible.builtin.apt:
+    name: "{{ ayasuna__utilities__host__privates__arguments.prepared.packages }}"
+    state: "present"
+    force_apt_get: true

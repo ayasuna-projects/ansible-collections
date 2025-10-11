@@ -1,0 +1,7 @@
+- name: "[Local>Hostname] Including tasks from role 'ayasuna.utilities.host' to configure hostname"
+  ansible.builtin.include_role:
+    name: "ayasuna.utilities.host"
+    tasks_from: "hostname.yml"
+  vars:
+    ayasuna__utilities__host__inputs__hostname: "{{ ayasuna__ingot__rescue__privates__arguments.prepared.name }}"
+

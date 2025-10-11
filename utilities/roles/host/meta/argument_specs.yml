@@ -1,0 +1,227 @@
+argument_specs:
+  packages:
+    short_description: |
+      Required Packages: apt
+      
+      Upgrades the system & installs packages.
+      The following packages are always installed: openssh-server, sudo, nftables, htop, iotop, nload, parted, iproute2, dnsutils, curl, bash-completion, grep
+    context: &default_context
+      prefixes:
+        - "ayasuna__utilities__host__inputs__"
+    options:
+      ayasuna__utilities__host__inputs__packages:
+        description: "The packages in addition to the default packages to install"
+        type: "list"
+        elements: "str"
+        default: [ ]
+  hostname:
+    short_description: |
+      Manages: /etc/hosts, /etc/hostname
+      
+      Sets the systems hostname.
+    context: *default_context
+    options:
+      ayasuna__utilities__host__inputs__hostname:
+        type: "str"
+        description: "The hostname to set"
+        required: true
+  ssh:
+    short_description: |
+      Manages: /etc/sshd_config
+      
+      Configures the SSH service.
+    context: *default_context
+    options:
+      ayasuna__utilities__host__inputs__host_key_directory:
+        type: "str"
+        description: "The path to the directory in which the host keys should be placed. Will be created if it doesn't exist"
+        required: true
+  volume:
+    short_description: |
+      Manages: ${mount.target}, /etc/systemd/system/${mount.target | systemd-escape}.mount
+      
+      Sets-up/manages a single volume.
+      A GPT partition table with a single partition will created on the block device device backing volume. 
+      The volume is set up in such a way that it is automatically mounted at boot (before the sysinit.target).
+      The role will also mount the volume if it is currently not mounted (e.g. because it is new).
+    context: *default_context
+    options:
+      ayasuna__utilities__host__inputs__device_serial:
+        type: "str"
+        description: |
+          The serial number of the (block) device which should back the data volume. 
+          Generally a disk (or drive). 
+        required: true
+      ayasuna__utilities__host__inputs__partition_name:
+        type: "str"
+        description: "The name to set for the partition"
+        required: true
+      ayasuna__utilities__host__inputs__filesystem_type:
+        type: "str"
+        description: "The filesystem that the volume should use"
+        required: true
+        choices:
+          - "ext4"
+      ayasuna__utilities__host__inputs__mount_target:
+        type: "str"
+        description: "The mount target path. Will be created if it does not exist"
+        required: true
+  firewall:
+    short_description: |
+      Manages: /etc/nftables.conf
+      
+      Creates/replaces the firewall configuration WITHOUT applying it
+    context: *default_context
+    options:
+      ayasuna__utilities__host__inputs__presets:
+        type: "list"
+        description: |
+          The rule presets to use when generating the firewall.
+
+          filter@log:
+            Logs packets hitting the default policy of the filter base chains.
+
+          filter@forward.default:
+            Accepts all packets hitting the "filter.forward" base chain if they belong to an existing flow.
+            Additionally drops all packets belonging to invalid flows.
+
+          filter@input.default:
+            Applies some sane default rules for all packets hitting the "filter.input" base chain like
+            accepting all packets that belong to an existing flow and dropping packets belonging to invalid flows.
+            Accepting valid loopback packets and dropping invalid ones. 
+            Allowing safe ICMP packets (especially for IPv6).
+            Apart from special cases this preset should generally be applied. 
+
+          filter@input.ssh:
+            Accepts all SSH input traffic on port 22. 
+
+        required: true
+        elements: "str"
+        choices:
+          - "filter@log"
+          - "filter@forward.default"
+          - "filter@input.default"
+          - "filter@input.ssh"
+      ayasuna__utilities__host__inputs__definitions:
+        type: "list"
+        description: |
+          The additional definitions to add the firewall definition. 
+          May be anything that is valid within a 'table inet' block but may not contain the string 'SYSTEM' (case insensitive).
+          The definitions will be added at the beginning of the block. 
+          Definitions should not define base chains. 
+        required: true
+        elements: "str"
+        context:
+          rules:
+            - expression: "'SYSTEM' not in (arguments.definitions | join(' ') | upper)"
+              message: "The string 'SYSTEM' (case insensitive) may not appear in custom definitions"
+      ayasuna__utilities__host__inputs__prerouting_chains:
+        type: "list"
+        description: |
+          NFT hook: prerouting
+          NFT type: filter
+
+          The names of the chains to jump to, to perform PREROUTING.
+          The chains will be jumped to in the specified order.
+          All packets that are either destined for the host itself (INPUT)
+          or traverse through the host (FORWARD) are handled by this chain.
+        required: true
+        elements: "str"
+      ayasuna__utilities__host__inputs__input_chains:
+        type: "list"
+        description: |
+          NFT hook: input
+          NFT type: filter
+
+          The names of the chains to jump to, to perform INPUT filtering.
+          The chains will be jumped to in the specified order.
+          All packets coming from some other hosts and 
+          that are destined for the host itself (INPUT) are handled by this chain.
+        required: true
+        elements: "str"
+      ayasuna__utilities__host__inputs__forward_chains:
+        type: "list"
+        description: |
+          NFT hook: forward
+          NFT type: filter
+          
+          The names of the chains to jump to, to perform FORWARD filtering.
+          The chains will be jumped to in the specified order.
+          All packets coming from some other hosts and 
+          that are just traversing through this host (FORWARD) are handled by this chain.
+        required: true
+        elements: "str"
+      ayasuna__utilities__host__inputs__output_chains:
+        type: "list"
+        description: |
+          NFT hook: output
+          NFT type: filter
+          
+          The names of the chains to jump to, to perform OUTPUT filtering.
+          The chains will be jumped to in the specified order.
+          All packets that where generated by a local process of the host (OUTPUT) are handled by this chain.
+        required: true
+        elements: "str"
+      ayasuna__utilities__host__inputs__postrouting_chains:
+        type: "list"
+        description: |
+          NFT hook: postrouting
+          NFT type: nat
+          
+          The names of the chains to jump to, to perform POSTROUTING.
+          The chains will be jumped to in the specified order.
+          All packets that leave the host, either
+          because they're FORWARDED or because they're OUTPUT packets are handled by this chain.
+          Note that these are NAT type chains meaning only the first packet of any 
+          given flow is processed by the chain - that means they're not suitable for filtering.
+        required: true
+        elements: "str"
+  users:
+    short_description: |
+      Required Packages: sudo
+      Manages: /etc/sudoers.d/
+      
+      Sets up users. 
+    context: *default_context
+    options:
+      ayasuna__utilities__host__inputs__users:
+        type: "list"
+        description: | 
+          Defines the users to setup/configure, all of the users (except for root) will be able to become root by using 'sudo'
+        required: true
+        elements: "dict"
+        context:
+          rules:
+            - expression: "(arguments.users | length) > 0"
+              message: "At least one user must be specified"
+            - expression: "(arguments.users | map(attribute='name') | select('==', 'root') | length) == 1"
+              message: "At least the root user must be specified"
+        options:
+          name:
+            type: "str"
+            description: "The user name"
+            required: true
+          password:
+            type: "str"
+            description: "The password of the user"
+            required: true
+          public_keys:
+            type: "list"
+            description: "The public keys to setup"
+            elements: "dict"
+            required: true
+            options:
+              name:
+                type: "str"
+                description: "The name of the public key"
+                required: true
+              content:
+                type: "str"
+                description: "The contents of the public key"
+                required: true
+              type:
+                type: "str"
+                description: "The public key type"
+                required: true
+                choices:
+                  - "ecdsa-sha2-nistp521"

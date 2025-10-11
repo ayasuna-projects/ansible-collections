@@ -1,0 +1,83 @@
+# (Somewhat) ensure that the disks we are potentially interested in are present/available, probably overkill
+- name: "[Volume] Executing 'udevadm settle' command to ensure all block devices are present/available"
+  ansible.builtin.shell:
+    cmd: "udevadm settle --timeout=5"
+  failed_when: false
+
+- name: "[Volume] Executing 'lsblk' command"
+  ansible.builtin.shell:
+    cmd: "lsblk --tree --json --output NAME,PATH,SERIAL"
+  changed_when: false
+  register: ayasuna__utilities__host__privates__lsblk1
+
+- name: "[Volume] Determining block device to partition"
+  ansible.builtin.set_fact:
+    ayasuna__utilities__host__privates__block_device: "{{ (ayasuna__utilities__host__privates__lsblk1.stdout | from_json)['blockdevices'] | selectattr('serial', '==', ayasuna__utilities__host__privates__arguments.prepared.device_serial) | first }}"
+
+- name: "[Volume] Partitioning block device backing the volume"
+  community.general.parted:    
+    # We're not using UUID here because the disk itself may not have one
+    device: "{{ ayasuna__utilities__host__privates__block_device['path'] }}"
+    align: "optimal"
+    label: "gpt"
+    name: "{{ ayasuna__utilities__host__privates__arguments.prepared.partition_name }}"
+    number: 1
+    state: "present"
+    part_start: "0%"
+    part_end: "100%"
+    resize: false
+
+# Ensure the UDEV service had time to process the (potential) partition changes and update the /dev/ directory accordingly
+- name: "[Volume] Executing 'udevadm settle' command to to ensure the partition changes have been picked up by the UDEV service"
+  ansible.builtin.shell:
+    cmd: "udevadm settle --timeout=5"
+  failed_when: false
+
+- name: "[Volume] Executing 'lsblk' command again"
+  ansible.builtin.shell:
+    cmd: "lsblk --tree --json --output NAME,PARTUUID {{ ayasuna__utilities__host__privates__block_device['path'] }}"
+  changed_when: false
+  register: ayasuna__utilities__host__privates__lsblk2
+  
+- name: "[Volume] Determining partition to create filesystem on"
+  ansible.builtin.set_fact:
+    ayasuna__utilities__host__privates__partition: "{{ (ayasuna__utilities__host__privates__lsblk2.stdout | from_json)['blockdevices'][0]['children'][0] }}"
+
+- name: "[Volume] Creating filesystem on partition"
+  community.general.filesystem:
+    device: "/dev/disk/by-partuuid/{{ ayasuna__utilities__host__privates__partition['partuuid'] }}"
+    type: "{{ ayasuna__utilities__host__privates__arguments.prepared.filesystem_type }}"
+    force: false
+    resizefs: false
+    state: "present"
+
+- name: "[Volume] Creating mount target directory (if it doesn't exist)"
+  ansible.builtin.file:
+    path: "{{ ayasuna__utilities__host__privates__arguments.prepared.mount_target }}"
+    recurse: false
+    state: "directory"
+    mode: "0755"
+    owner: "root"
+    group: "root"
+
+- name: "[Volume] Executing 'systemd-escape' command to generate mount file name"
+  ansible.builtin.shell:
+    cmd: "systemd-escape -p {{ ayasuna__utilities__host__privates__arguments.prepared.mount_target }}"
+  changed_when: false
+  register: ayasuna__utilities__host__privates__systemd_escape
+
+- name: "[Volume] Setting up .mount file for volume"
+  ansible.builtin.template:
+    src: "volume/volume.mount.j2"
+    dest: "/etc/systemd/system/{{ ayasuna__utilities__host__privates__systemd_escape.stdout }}.mount"
+    mode: "0644"
+    owner: "root"
+    group: "root"
+
+- name: "[Volume] Enabling & starting mount for volume"
+  ansible.builtin.systemd_service:
+    name: "{{ ayasuna__utilities__host__privates__systemd_escape.stdout }}.mount"
+    state: "started" # Don't restart the mount to not cause unnecessary disruptions
+    enabled: true
+    masked: false
+    daemon_reload: true

@@ -1,0 +1,7 @@
+- name: "[Local>Users] Including tasks from role 'ayasuna.utilities.host' to configure users"
+  ansible.builtin.include_role:
+    name: "ayasuna.utilities.host"
+    tasks_from: "users.yml"
+  vars:
+    ayasuna__utilities__host__inputs__users: "{{ ayasuna__ingot__k8s__privates__arguments.prepared.users }}"
+

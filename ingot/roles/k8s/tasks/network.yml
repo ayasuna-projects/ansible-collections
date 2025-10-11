@@ -1,0 +1,8 @@
+- name: "[Network] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['network']}}"
+  register: ayasuna__ingot__k8s__privates__arguments
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@network"
+

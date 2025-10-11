@@ -1,0 +1,7 @@
+- name: "[Local>Network] Setting up .network file for ethernet interfaces"
+  ansible.builtin.template:
+    src: "local/ethernet.network.j2"
+    dest: "/etc/systemd/network/00-ethernet.network"
+    mode: "0644"
+    owner: "root"
+    group: "root"

@@ -1,0 +1,1 @@
+Contains ansible collections.

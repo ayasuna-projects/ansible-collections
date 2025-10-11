@@ -1,0 +1,149 @@
+{% set prepared_arguments = ayasuna__utilities__ingot__privates__build_arguments.prepared %}
+{% set host_ssh_port = 6895 %}
+{% set host_netdev_socket_port_start = 6935 %}
+
+packer {
+  required_plugins {
+    qemu = {
+      version = "~> 1"
+      source  = "github.com/hashicorp/qemu"
+    }
+  }
+}
+
+source "qemu" "default" {
+  output_directory       = "{{ prepared_arguments.working_directory }}/vm/test/output/"
+  iso_url                = "{{ prepared_arguments.working_directory }}/vm/test/boot.img"
+  iso_checksum           = "none"
+  accelerator            = "{{ prepared_arguments.qemu_accelerator }}"
+  headless               = "{{ prepared_arguments.qemu_headless | ternary('true', 'false') }}"
+  machine_type           = "q35"
+  cpus                   = 4
+  memory = 6144
+  # The disk interface should not really be necessary as we specify the disks/drives ourselves, but to be explicit we set it anyway
+  disk_interface         = "virtio"
+  disk_size              = "6G"
+  disk_image             = true
+  use_backing_file       = false
+  format                 = "raw"
+  boot_wait              = "10s"
+  boot_keygroup_interval = "500ms"
+  boot_key_interval      = "250ms"
+  boot_command = []
+  # The net device should not really be necessary as we specify the interfaces ourselves, but to be explicit we set it anyway
+  net_device             = "virtio-net"
+  communicator           = "ssh"
+  # We have to specify "skip_nat_mapping = true" here because we're specifying the network devices ourselves. 
+  # Without this setting packer doesn't directly connect to the specified "ssh_host" and "ssh_port" but instead attempts to connect to the forwarding rules packer wanted to create.
+  skip_nat_mapping       = true
+  ssh_host               = "{{ '::1' if prepared_arguments.test_ssh_ip is ansible.utils.ipv6 else '127.0.0.1' }}"
+  ssh_port               = {{ host_ssh_port }}
+  ssh_username           = "{{ prepared_arguments.test_ssh_username }}"
+  ssh_private_key_file   = "{{ prepared_arguments.working_directory }}/vm/test/ssh.key"
+
+  ssh_timeout      = "5m"
+  # This option specifies the name of the image file to create
+  vm_name = "test.img"
+  # GRUB is configured to use the well-known default path /EFI/BOOT/ so we don't really use the EFI vars and therefore drop them (we have no good way to copy them to the target machines anyway)
+  efi_drop_efivars = true
+  qemuargs = [
+    [
+      "-drive",
+      "file={{ prepared_arguments.working_directory }}/vm/efi.code.fd,if=pflash,unit=0,format=raw,readonly=on"
+    ],
+    [
+      "-drive",
+      "file={{ prepared_arguments.working_directory }}/vm/test/efi.vars.fd,if=pflash,unit=1,format=raw"
+    ],
+    [
+      "-drive",
+      "id=DRIVE_ROOT,file={{ prepared_arguments.working_directory }}/vm/test/output/test.img,if=none,cache=writeback,discard=ignore,format=raw"
+    ],
+    [
+      "-device",
+      "virtio-blk-pci,drive=DRIVE_ROOT,serial={{ prepared_arguments.test_disks_root_serial }},bootindex=1"
+    ],
+    
+    {% for additional in prepared_arguments.test_disks_additional %}
+    
+      [
+        "-drive",
+        "id=DRIVE_ADDITIONAL{{ loop.index0 }},file={{ prepared_arguments.working_directory }}/vm/test/additional{{ loop.index0 }}.img,if=none,cache=writeback,discard=ignore,format=raw"
+      ],
+      [
+        "-device",
+        "virtio-blk-pci,drive=DRIVE_ADDITIONAL{{ loop.index0 }},serial={{ additional.serial }}"
+      ],
+
+    {% endfor %}
+
+    {% for interface in prepared_arguments.test_interfaces %}
+
+      {% set netdev_id = "INTERFACE" + (loop.index0 | string) + "" %}
+      {% set netdev_options = "" %}
+      {% set ipv4_defined = interface.ipv4_cidr is defined and interface.ipv4_cidr != None %}
+      {% set ipv6_defined = interface.ipv6_cidr is defined and interface.ipv6_cidr != None %}
+    
+      {% if ipv4_defined or ipv6_defined %}
+
+        {% set netdev_options = "user,id=" + netdev_id + ",restrict=off" %}
+        {% set ssh_ip_in_ipv4_network = false %}
+        {% set ssh_ip_in_ipv6_network = false %}
+    
+    
+        {% if ipv4_defined %}
+    
+          {% set netdev_options = netdev_options + ",ipv4=on,net=" + interface.ipv4_cidr %}
+          {% set ssh_ip_in_ipv4_network = prepared_arguments.test_ssh_ip is ansible.utils.in_network(interface.ipv4_cidr) %}
+    
+        {% else %}
+    
+          {% set netdev_options = netdev_options + ",ipv4=off" %}
+    
+        {% endif %}
+    
+        {% if ipv6_defined %}
+    
+          {% set netdev_options = netdev_options + ",ipv6=on,ipv6-net=" + interface.ipv6_cidr %}
+          {% set ssh_ip_in_ipv6_network = prepared_arguments.test_ssh_ip is ansible.utils.in_network(interface.ipv6_cidr) %}
+    
+        {% else %}
+    
+          {% set netdev_options = netdev_options + ",ipv6=off" %}
+    
+        {% endif %}
+    
+          {% if ssh_ip_in_ipv4_network or ssh_ip_in_ipv6_network %}
+      
+            {% set netdev_options = netdev_options + ",hostfwd=tcp::" + (host_ssh_port | string) + "-" + prepared_arguments.test_ssh_ip + ":" + (prepared_arguments.test_ssh_port | string) %}
+    
+          {% endif %}
+      
+      {% else %}
+
+        {% set netdev_options = "socket,id=" + netdev_id + ",listen=127.0.0.1:" + ((host_netdev_socket_port_start + loop.index0) | string) %}
+      
+      {% endif %}
+  
+      [
+        "-netdev",
+        "{{ netdev_options }}"
+      ],
+      [
+        "-device",
+        "virtio-net,netdev={{ netdev_id }},mac={{ interface.mac }}"
+      ],
+
+    {% endfor %}
+  ]
+}
+
+build {
+  sources = ["source.qemu.default"]
+          
+  provisioner "shell" {
+    inline = [
+      "sudo -u root -- ansible-playbook /etc/ansible/playbooks/test.yml"
+    ]
+  }
+}

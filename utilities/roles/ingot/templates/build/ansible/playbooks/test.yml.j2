@@ -1,0 +1,64 @@
+{% set prepared_arguments = ayasuna__utilities__ingot__privates__build_arguments.prepared %}
+
+- name: "Test"
+  connection: "local"
+  hosts: "localhost"
+  serial: 1
+  gather_facts: true
+  tasks:
+    - name: "[Test] Wait until systemctl reports the system as 'running'"
+      ansible.builtin.shell:
+        cmd: "systemctl is-system-running --wait" # See https://www.man7.org/linux/man-pages/man1/systemctl.1.html for more info
+      changed_when: false
+      failed_when: test__privates__system_status.rc != 0 # systemctl is-system-running will complete with a non-zero exit code if the state is anything other than 'running'
+      register: test__privates__system_status
+
+    # Additionally, explicitly check that all expected services where part of the boot process.
+    # If they were part of the boot process the previous task implies that they have exited (or started) successfully, but 
+    # it doesn't make sure they were actually part of the boot process so we check them explicitly here.
+    - name: "[Test] Checking status of ingot-local.service"
+      ansible.builtin.shell:
+        cmd: "systemctl is-active --quiet ingot-local.service"
+      changed_when: false
+      failed_when: test__privates__host_init_local_service_status.rc != 0
+      register: test__privates__host_init_local_service_status
+
+    - name: "[Test] Checking status of ingot-network.service"
+      ansible.builtin.shell:
+        cmd: "systemctl is-active --quiet ingot-network.service"
+      changed_when: false
+      failed_when: test__privates__host_init_network_service_status.rc != 0
+      register: test__privates__host_init_network_service_status
+
+    - name: "[Test] Checking status of ingot-final.service"
+      ansible.builtin.shell:
+        cmd: "systemctl is-active --quiet ingot-final.service"
+      changed_when: false
+      failed_when: test__privates__host_init_final_service_status.rc != 0
+      register: test__privates__host_init_final_service_status
+
+    - name: "[Test] Checking status of nftables.service"
+      ansible.builtin.shell:
+        cmd: "systemctl is-active --quiet nftables.service"
+      changed_when: false
+      failed_when: test__privates__nftables_service_status.rc != 0
+      register: test__privates__nftables_service_status
+
+    - name: "[Test] Checking status of chrony.service"
+      ansible.builtin.shell:
+        cmd: "systemctl is-active --quiet chrony.service"
+      changed_when: false
+      failed_when: test__privates__chrony_service_status.rc != 0
+      register: test__privates__chrony_service_status
+
+    - name: "[Test] Checking status of ssh.service"
+      ansible.builtin.shell:
+        cmd: "systemctl is-active --quiet ssh.service"
+      changed_when: false
+      failed_when: test__privates__ssh_service_status.rc != 0
+      register: test__privates__ssh_service_status
+
+    - name: "[Test] Including 'test.yml' tasks from role '{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.build_ansible_role_fqn }}'"
+      ansible.builtin.include_role:
+        name: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.build_ansible_role_fqn }}"
+        tasks_from: "test.yml"

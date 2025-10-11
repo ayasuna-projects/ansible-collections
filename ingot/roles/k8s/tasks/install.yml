@@ -1,0 +1,26 @@
+- name: "[Install] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['install']}}"
+  register: ayasuna__ingot__k8s__privates__arguments
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@install"
+
+- name: "[Install] Including tasks from role 'ayasuna.utilities.host' to configure packages"
+  ansible.builtin.include_role:
+    name: "ayasuna.utilities.host"
+    tasks_from: "packages.yml"
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@install"
+  vars:
+    ayasuna__utilities__host__inputs__packages: "{{ [ 'nfs-common', 'open-iscsi', 'python3-kubernetes', 'python3-jsonpatch', 'python3-yaml' ] + ayasuna__ingot__k8s__privates__arguments.prepared.packages }}"
+
+- name: "[Install] Downloading K3s binary"
+  ansible.builtin.get_url:
+    url: "https://github.com/k3s-io/k3s/releases/download/{{ ayasuna__ingot__k8s__privates__arguments.prepared.k3s_version }}/k3s"
+    checksum: "sha256:https://github.com/k3s-io/k3s/releases/download/{{ ayasuna__ingot__k8s__privates__arguments.prepared.k3s_version }}/sha256sum-amd64.txt"
+    dest: "/usr/local/bin/k3s"
+    mode: "0755"
+    owner: "root"
+    group: "root"

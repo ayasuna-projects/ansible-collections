@@ -1,0 +1,8 @@
+menuentry "[/v1/{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }}/root.squashfs]: {{ ayasuna__utilities__ingot__privates__deploy_arguments.prepared.source_ingot | basename }} ({{ "%Y-%m-%dT%H:%M:%SZ" | strftime(second=ayasuna__utilities__ingot__privates__deploy_deployment_id, utc=true) }})" --id ingot-{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }} {
+
+    echo "Loading Linux kernel ..."
+    linux (${ingot_deployment_fs})/v1/{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }}/vmlinuz root=${ingot_boot_fs_uuid}:${ingot_deployment_fs_uuid}:${ingot_data_fs_uuid}:v1:{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }} rw quiet
+    
+    echo "Loading initial ramdisk ..."
+    initrd (${ingot_deployment_fs})/v1/{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }}/initrd.img
+}

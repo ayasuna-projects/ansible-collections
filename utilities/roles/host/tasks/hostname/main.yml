@@ -1,0 +1,21 @@
+# We're not using hostnamectl or ansible.builtin.hostname here because this task might be called very early in the 
+# boot process which can lead to both "commands" to fail
+- name: "[Hostname] Replacing '/etc/hostname'"
+  ansible.builtin.template:
+    src: "hostname/hostname.j2"
+    dest: "/etc/hostname"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+
+- name: "[Hostname] Replacing '/proc/sys/kernel/hostname'"
+  ansible.builtin.shell:
+    cmd: "echo \"{{ ayasuna__utilities__host__privates__arguments.prepared.hostname }}\" > /proc/sys/kernel/hostname"
+
+- name: "[Hostname] Replacing /etc/hosts"
+  ansible.builtin.template:
+    src: "hostname/hosts.j2"
+    dest: "/etc/hosts"
+    owner: "root"
+    group: "root"
+    mode: "0644"

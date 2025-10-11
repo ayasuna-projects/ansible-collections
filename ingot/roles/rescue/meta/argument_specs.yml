@@ -1,0 +1,70 @@
+argument_specs:
+  install:
+    short_description: "The install hook"
+    context: &default_context
+      prefixes:
+        - "ayasuna__ingot__rescue__inputs__"
+    options: { }
+  local:
+    short_description: "The local hook for the rescue system"
+    context: *default_context
+    options: &default_options
+      ayasuna__ingot__rescue__inputs__name:
+        description: "Defines the system host name"
+        type: "str"
+        required: true
+      ayasuna__ingot__rescue__inputs__users:
+        type: "list"
+        description: |
+          Defines the users to setup/configure, all of the users (except for root) will be able to become root by using 'sudo'
+        required: true
+        elements: "dict"
+        context:
+          rules:
+            - expression: "(arguments.users | length) > 0"
+              message: "At least one user must be specified"
+            - expression: "(arguments.users | map(attribute='name') | select('==', 'root') | length) == 1"
+              message: "At least the root user must be specified"
+        options:
+          name:
+            type: "str"
+            description: "The user name"
+            required: true
+          password:
+            type: "str"
+            description: "The password of the user"
+            required: true
+          public_keys:
+            type: "list"
+            description: "The public keys to setup"
+            elements: "dict"
+            required: true
+            options:
+              name:
+                type: "str"
+                description: "The name of the public key"
+                required: true
+              content:
+                type: "str"
+                description: "The contents of the public key"
+                required: true
+              type:
+                type: "str"
+                description: "The public key type"
+                required: true
+                choices:
+                  - "ecdsa-sha2-nistp521"
+  network:
+    short_description: "The network hook of the rescue system"
+    context: *default_context
+    options: *default_options
+  final:
+    short_description: "The final hook of the rescue system"
+    context: *default_context
+    options: *default_options
+  test:
+    short_description: "The test hook of the rescue system"
+    context: *default_context
+    options: *default_options
+    
+

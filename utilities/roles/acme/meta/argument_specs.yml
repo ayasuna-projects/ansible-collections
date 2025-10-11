@@ -1,0 +1,61 @@
+argument_specs:
+  upsert_account:
+    short_description: "Creates a new ACME account or updates an existing one"
+    context:
+      prefixes:
+        - "ayasuna__utilities__acme__inputs__"
+    options:
+      ayasuna__utilities__acme__inputs__password:
+        description: "The password to secure the account key with"
+        type: "str"
+        required: true
+      ayasuna__utilities__acme__inputs__state_directory:
+        description: "The directory in which ACME related state files are stored (account key). The directory will be created if it doesn't exist"
+        type: "str"
+        required: true
+      ayasuna__utilities__acme__inputs__acme_directory:
+        description: "The ACME (v2) directory to use"
+        type: "str"
+        default: "https://acme-staging-v02.api.letsencrypt.org/directory"
+      ayasuna__utilities__acme__inputs__account_email:
+        description: "The (contact) E-Mail to use for the account"
+        type: "str"
+        required: true
+  upsert_certificate:
+    short_description: "Creates a new TLS certificate via the ACME protocol"
+    context:
+      prefixes:
+        - "ayasuna__utilities__acme__inputs__"
+    options:
+      ayasuna__utilities__acme__inputs__password:
+        description: "The password to secure the account & certificate key with"
+        type: "str"
+        required: true
+      ayasuna__utilities__acme__inputs__state_directory:
+        description: "The directory in which ACME related state files are stored (account key). The directory will be created if it doesn't exist"
+        type: "str"
+        required: true
+      ayasuna__utilities__acme__inputs__acme_directory:
+        description: "The ACME (v2) directory to use"
+        type: "str"
+        default: "https://acme-staging-v02.api.letsencrypt.org/directory"
+      ayasuna__utilities__acme__inputs__hetzner_token:
+        description: "The hetzner API token to use"
+        type: "str"
+        required: true
+      ayasuna__utilities__acme__inputs__certificate_zone:
+        description: "The name of the (Hetzner) DNS zone to add the TXT records to so that the the ACME challenge can be solved"
+        type: "str"
+        required: true
+      ayasuna__utilities__acme__inputs__certificate_primary_name:
+        description: "The primary (DNS) name of the certificate, will be used as the common name for the certificate"
+        type: "str"
+        required: true
+      ayasuna__utilities__acme__inputs__certificate_subject_alternative_names:
+        description: "The SANs of the certificate"
+        type: "str"
+        required: true
+      ayasuna__utilities__acme__inputs__certificate_renew_threshold:
+        description: "Renew the certificate if it is valid for less then the specified number of days"
+        type: "int"
+        default: 25

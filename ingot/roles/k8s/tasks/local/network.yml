@@ -1,0 +1,39 @@
+- name: "[Local>Network] Setting up .link files for WAN ports"
+  ansible.builtin.template:
+    src: "local/network/wan_port.link.j2"
+    dest: "/etc/systemd/network/00-wan0p{{ ayasuna__ingot__k8s__privates__wan_port_index }}.link"
+    mode: "0644"
+    owner: "root"
+    group: "root"
+  loop: "{{ ayasuna__ingot__k8s__privates__arguments.prepared.wan_interfaces }}"
+  loop_control:
+    loop_var: ayasuna__ingot__k8s__privates__wan_port
+    index_var: ayasuna__ingot__k8s__privates__wan_port_index
+
+- name: "[Local>Network] Setting up .network files for WAN ports"
+  ansible.builtin.template:
+    src: "local/network/wan_port.network.j2"
+    dest: "/etc/systemd/network/00-wan0p{{ ayasuna__ingot__k8s__privates__wan_port_index }}.network"
+    mode: "0640"
+    owner: "systemd-network"
+    group: "systemd-network"
+  loop: "{{ ayasuna__ingot__k8s__privates__arguments.prepared.wan_interfaces }}"
+  loop_control:
+    loop_var: ayasuna__ingot__k8s__privates__wan_port
+    index_var: ayasuna__ingot__k8s__privates__wan_port_index
+
+- name: "[Local>Network] Setting up .netdev file for WAN interface"
+  ansible.builtin.template:
+    src: "local/network/wan.netdev.j2"
+    dest: "/etc/systemd/network/01-wan.netdev"
+    mode: "0644"
+    owner: "root"
+    group: "root"
+
+- name: "[Local>Network] Setting up .network file for WAN interface"
+  ansible.builtin.template:
+    src: "local/network/wan.network.j2"
+    dest: "/etc/systemd/network/01-wan.network"
+    mode: "0644"
+    owner: "root"
+    group: "root"

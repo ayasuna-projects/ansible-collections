@@ -1,0 +1,276 @@
+- name: "[Deploy] Executing 'lsblk' command to get information about all block devices (1)"
+  ansible.builtin.shell:
+    cmd: "lsblk --tree --json --output NAME,PATH,SERIAL,MOUNTPOINT"
+  changed_when: false
+  register: ayasuna__utilities__ingot__privates__deploy_lsblk1
+
+- name: "[Deploy] Determining target block device (1)"
+  ansible.builtin.set_fact:
+    ayasuna__utilities__ingot__privates__deploy_lsblk1_target_block_device: "{{ (ayasuna__utilities__ingot__privates__deploy_lsblk1.stdout | from_json)['blockdevices'] | selectattr('serial' if ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_device_serial is not none else 'path', '==', ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_device_serial if ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_device_serial is not none else ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_device_path) | first }}"
+
+- block:
+    - name: "[Deploy] Adding BOOT partition to target block device"
+      community.general.parted:
+        device: "{{ ayasuna__utilities__ingot__privates__deploy_lsblk1_target_block_device.path }}"
+        align: "optimal"
+        label: "gpt"
+        name: "BOOT"
+        number: 1
+        state: "present"
+        part_start: "0%"
+        part_end: "{{ ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_partitions_boot_size }}MiB"
+        resize: false
+        fs_type: "fat32"
+        flags:
+          - "esp"
+        
+    - name: "[Deploy] Adding DEPLOYMENT partition to target block device"
+      community.general.parted:
+        device: "{{ ayasuna__utilities__ingot__privates__deploy_lsblk1_target_block_device.path }}"
+        align: "optimal"
+        label: "gpt"
+        name: "DEPLOYMENT"
+        number: 2
+        state: "present"
+        part_start: "{{ ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_partitions_boot_size }}MiB"
+        part_end: "{{ ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_partitions_boot_size + ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_partitions_deployment_size }}MiB"
+        resize: false
+        fs_type: "ext4"
+        flags: []
+        
+    - name: "[Deploy] Adding DATA partition to target block device"
+      community.general.parted:
+        device: "{{ ayasuna__utilities__ingot__privates__deploy_lsblk1_target_block_device.path }}"
+        align: "optimal"
+        label: "gpt"
+        name: "DATA"
+        number: 3
+        state: "present"
+        part_start: "{{ ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_partitions_boot_size + ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_partitions_deployment_size }}MiB"
+        part_end: "100%"
+        resize: false
+        fs_type: "ext4"
+        flags: []
+
+    - name: "[Deploy] Executing 'udevadm settle' command to ensure the created partitions are visible"
+      ansible.builtin.shell:
+        cmd: "udevadm settle --timeout=5"
+      failed_when: false
+
+    - name: "[Deploy] Executing 'lsblk' command to get information about all block devices (2)"
+      ansible.builtin.shell:
+        cmd: "lsblk --tree --json --output NAME,PATH,SERIAL,MOUNTPOINT"
+      changed_when: false
+      register: ayasuna__utilities__ingot__privates__deploy_lsblk2
+    
+    - name: "[Deploy] Determining target block device (2)"
+      ansible.builtin.set_fact:
+        ayasuna__utilities__ingot__privates__deploy_lsblk2_target_block_device: "{{ (ayasuna__utilities__ingot__privates__deploy_lsblk2.stdout | from_json)['blockdevices'] | selectattr('path', '==', ayasuna__utilities__ingot__privates__deploy_lsblk1_target_block_device.path) | first }}"
+
+    - name: "[Deploy] Creating FAT32 filesystem on BOOT partition"
+      community.general.filesystem:
+        device: "{{ ayasuna__utilities__ingot__privates__deploy_lsblk2_target_block_device.children[0].path }}"
+        type: "vfat"
+        force: false
+        resizefs: false
+        state: "present"
+        opts: "-F 32"
+        
+    - name: "[Deploy] Creating EXT4 filesystem on DEPLOYMENT partition"
+      community.general.filesystem:
+        device: "{{ ayasuna__utilities__ingot__privates__deploy_lsblk2_target_block_device.children[1].path }}"
+        type: "ext4"
+        force: false
+        resizefs: false
+        state: "present"
+        
+    - name: "[Deploy] Creating EXT4 filesystem on DATA partition"
+      community.general.filesystem:
+        device: "{{ ayasuna__utilities__ingot__privates__deploy_lsblk2_target_block_device.children[2].path }}"
+        type: "ext4"
+        force: false
+        resizefs: false
+        state: "present"
+        
+  when: ayasuna__utilities__ingot__privates__deploy_lsblk1_target_block_device.children is not defined
+
+- name: "[Deploy] Executing 'lsblk' command to get information about all block devices (3)"
+  ansible.builtin.shell:
+    cmd: "lsblk --tree --json --output NAME,PATH,SERIAL,MOUNTPOINT"
+  changed_when: false
+  register: ayasuna__utilities__ingot__privates__deploy_lsblk3
+  
+- name: "[Deploy] Determining target block device (3)"
+  ansible.builtin.set_fact:
+    ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device: "{{ (ayasuna__utilities__ingot__privates__deploy_lsblk3.stdout | from_json)['blockdevices'] | selectattr('path', '==', ayasuna__utilities__ingot__privates__deploy_lsblk1_target_block_device.path) | first }}"
+
+- name: "[Deploy] Creating temporary working directory"
+  ansible.builtin.tempfile:
+    state: "directory"
+  register: ayasuna__utilities__ingot__privates__deploy_temporary_directory
+
+- name: "[Deploy] Creating temporary mount point directories"
+  ansible.builtin.file:
+    path: "{{ ayasuna__utilities__ingot__privates__deploy_item }}"
+    recurse: false
+    state: "directory"
+    mode: "0755"
+    owner: "root"
+    group: "root"
+  loop:
+    - "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/root/"
+    - "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/boot/"
+    - "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/"
+  loop_control:
+    loop_var: "ayasuna__utilities__ingot__privates__deploy_item"
+    index_var: "ayasuna__utilities__ingot__privates__deploy_index"
+
+- block:
+    - name: "[Deploy] Mounting boot partition (potentially via bind mount if it is already mounted)"
+      ansible.posix.mount:
+        path: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/boot/"
+        src: "{{ ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[0].mountpoint if ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[0].mountpoint is not none else ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[0].path }}"
+        opts: "{{ 'bind' if ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[0].mountpoint is not none else '' }}"
+        fstype: "{{ 'none' if ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[0].mountpoint is not none else 'vfat' }}"
+        state: "ephemeral"
+        
+    - name: "[Deploy] Mounting deployment partition (potentially via bind mount if it is already mounted)"
+      ansible.posix.mount:
+        path: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/"
+        src: "{{ ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[1].mountpoint if ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[1].mountpoint is not none else ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[1].path }}"
+        opts: "{{ 'bind' if ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[1].mountpoint is not none else '' }}"
+        fstype: "{{ 'none' if ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[1].mountpoint is not none else 'ext4' }}"
+        state: "ephemeral"
+        
+    - name: "[Deploy] Determining deployment ID (current unix timestamp)"
+      ansible.builtin.set_fact:
+        ayasuna__utilities__ingot__privates__deploy_deployment_id: "{{ now(utc=true).timestamp() | int }}"
+
+    - name: "[Deploy] Creating directory for deployment on deployment partition"
+      ansible.builtin.file:
+        path: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/v1/{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }}/"
+        recurse: false
+        state: "directory"
+        mode: "0755"
+        owner: "root"
+        group: "root"
+
+    - name: "[Deploy] Copying ingot (squashfs image) to deployment directory"
+      ansible.builtin.copy:
+        dest: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/v1/{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }}/root.squashfs"
+        src: "{{ ayasuna__utilities__ingot__privates__deploy_arguments.prepared.source_ingot }}"
+        remote_src: false
+        force: true
+        mode: "0664"
+        owner: "root"
+        group: "root"
+        
+    - name: "[Deploy] Mounting copied ingot (squashfs image) to extract kernel and initrd"
+      ansible.posix.mount:
+        path: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/root/"
+        src: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/v1/{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }}/root.squashfs"
+        fstype: "squashfs"
+        state: "ephemeral"
+        
+    - name: "[Deploy] Extracting kernel from ingot (squashfs image) to deployment directory"
+      ansible.builtin.copy:
+        dest: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/v1/{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }}/vmlinuz"
+        src: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/root/vmlinuz"
+        remote_src: true
+        force: true
+        mode: "0664"
+        owner: "root"
+        group: "root"
+        
+    - name: "[Deploy] Extracting initrd from ingot (squashfs image) to deployment directory"
+      ansible.builtin.copy:
+        dest: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/v1/{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }}/initrd.img"
+        src: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/root/initrd.img"
+        remote_src: true
+        force: true
+        mode: "0664"
+        owner: "root"
+        group: "root"
+        
+    - name: "[Deploy] Setting up arguments.yml for ingot (squashfs image) in deployment directory"
+      ansible.builtin.template:
+        src: "deploy/arguments.yml.j2"
+        dest: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/v1/{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }}/arguments.yml"
+        mode: "0664"
+        owner: "root"
+        group: "root"
+        
+    - name: "[Deploy] Setting up grub.cfg for ingot (squashfs image) in deployment directory"
+      ansible.builtin.template:
+        src: "deploy/grub.deployment.cfg.j2"
+        dest: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/v1/{{ ayasuna__utilities__ingot__privates__deploy_deployment_id }}/grub.cfg"
+        mode: "0664"
+        owner: "root"
+        group: "root"
+        
+    # We're not using 'lsblk' here because 'lsblk' gets its information from UDEV which may or may not have detected that the partitions have been formatted (Especially with loop devices UDEV (or the kernel) seems not to be able to detect formats automatically),
+    # instead of triggering events via 'udevadm trigger' (which also seems to behave unexpectedly for loop devices + docker) we instead opt to read the information directly from the device itself via 'blkid' 
+    - name: "[Deploy] Executing 'blkid' command to get the UUID of the BOOT partition filesystem"
+      ansible.builtin.shell:
+        cmd: "blkid -s UUID -o value {{ ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[0].path }}"
+      changed_when: false
+      register: ayasuna__utilities__ingot__privates__deploy_blkid_boot
+        
+    - name: "[Deploy] Executing 'blkid' command to get the UUID of the DEPLOYMENT partition filesystem"
+      ansible.builtin.shell:
+        cmd: "blkid -s UUID -o value {{ ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[1].path }}"
+      changed_when: false
+      register: ayasuna__utilities__ingot__privates__deploy_blkid_deployment
+      
+    - name: "[Deploy] Executing 'blkid' command to get the UUID of the DATA partition filesystem"
+      ansible.builtin.shell:
+        cmd: "blkid -s UUID -o value {{ ayasuna__utilities__ingot__privates__deploy_lsblk3_target_block_device.children[2].path }}"
+      changed_when: false
+      register: ayasuna__utilities__ingot__privates__deploy_blkid_data
+                
+    - name: "[Deploy] Determining all currently deployed ingots (squashfs images)"
+      ansible.builtin.find:
+        paths:
+          - "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/v1/"
+        file_type: "directory"
+        follow: false
+        get_checksum: false
+        hidden: false
+        recurse: false
+      register: ayasuna__utilities__ingot__privates__deploy_deployment_v1_directories
+      
+    - name: "[Deploy] Installing GRUB to boot partition filesystem"
+      ansible.builtin.shell:
+        # TODO: Make target configurable
+        cmd: "grub-install --target=x86_64-efi --uefi-secure-boot --boot-directory={{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/boot/ --efi-directory={{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/boot/ --removable"
+
+    - name: "[Deploy] Setting up grub.cfg on boot partition"
+      ansible.builtin.template:
+        src: "deploy/grub.boot.cfg.j2"
+        dest: "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/boot/grub/grub.cfg"
+        mode: "0664"
+        owner: "root"
+        group: "root"
+        
+    - name: "[Deploy] Removing old deployments"
+      ansible.builtin.file:
+        path: "{{ ayasuna__utilities__ingot__privates__deploy_item }}"
+        state: "absent"
+      loop: "{{ (ayasuna__utilities__ingot__privates__deploy_deployment_v1_directories.files | map(attribute='path') | sort(reverse=true, case_sensitive=true))[ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_partitions_deployment_history:] }}"
+      loop_control:
+        loop_var: "ayasuna__utilities__ingot__privates__deploy_item"
+        index_var: "ayasuna__utilities__ingot__privates__deploy_index"
+
+  always:
+    - name: "[Deploy] Unmounting temporary mounts"
+      ansible.posix.mount:
+        path: "{{ ayasuna__utilities__ingot__privates__deploy_item }}"
+        state: "unmounted"
+      loop:
+        - "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/root/"
+        - "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/boot/"
+        - "{{ ayasuna__utilities__ingot__privates__deploy_temporary_directory.path }}/deployment/"
+      loop_control:
+        loop_var: "ayasuna__utilities__ingot__privates__deploy_item"
+        index_var: "ayasuna__utilities__ingot__privates__deploy_index"
+  

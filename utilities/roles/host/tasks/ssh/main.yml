@@ -1,0 +1,33 @@
+- name: "[SSH] Creating host key directory (if it doesn't exist)"
+  ansible.builtin.file:
+    path: "{{ ayasuna__utilities__host__privates__arguments.prepared.host_key_directory }}"
+    recurse: false
+    state: "directory"
+    mode: "0755"
+    owner: "root"
+    group: "root"
+    
+- name: "[SSH] Generating host key"
+  ansible.builtin.shell:
+    cmd: "[ -e {{ ayasuna__utilities__host__privates__arguments.prepared.host_key_directory }}/{{ ayasuna__utilities__host__privates__item.name }} ] || ssh-keygen -t {{ ayasuna__utilities__host__privates__item.type }} {{ ayasuna__utilities__host__privates__item.opts }} -f {{ ayasuna__utilities__host__privates__arguments.prepared.host_key_directory }}/{{ ayasuna__utilities__host__privates__item.name }} -N ''"
+  loop:
+    - name: "ssh_host_rsa_key"
+      type: "rsa"
+      opts: "-b 8192"
+    - name: "ssh_host_ecdsa_key"
+      type: "ecdsa"
+      opts: "-b 521"
+    - name: "ssh_host_ed25519_key"
+      type: "ed25519"
+      opts: ""
+  loop_control:
+    loop_var: "ayasuna__utilities__host__privates__item"
+    index_var: "ayasuna__utilities__host__privates__index"
+    
+- name: "[SSH] Setting up (hardened) SSH service config"
+  ansible.builtin.template:
+    src: "ssh/sshd_config.j2"
+    dest: "/etc/ssh/sshd_config"
+    owner: "root"
+    group: "root"
+    mode: "0644"

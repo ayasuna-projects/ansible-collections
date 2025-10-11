@@ -1,0 +1,17 @@
+- ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs'][ayasuna__utilities__acme__privates__task_name]}}"
+  register: ayasuna__utilities__acme__privates__arguments
+
+- name: "[Upsert>Common] Determining common facts"
+  ansible.builtin.set_fact:
+    ayasuna__utilities__acme__privates__account_key_path: "{{ ayasuna__utilities__acme__privates__arguments.prepared.state_directory }}/account.key"
+    ayasuna__utilities__acme__privates__certificates_path: "{{ ayasuna__utilities__acme__privates__arguments.prepared.state_directory }}/certificates/"
+    
+- name: "[Upsert>Common] Setting up state directory '{{ ayasuna__utilities__acme__privates__arguments.prepared.state_directory }}'"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: "directory"
+    mode: "0775"
+  loop:
+    - "{{ ayasuna__utilities__acme__privates__arguments.prepared.state_directory }}"
+    - "{{ ayasuna__utilities__acme__privates__certificates_path }}"

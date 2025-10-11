@@ -1,0 +1,15 @@
+[Unit]
+Description=Bind mount for /etc/rancher/
+DefaultDependencies=yes
+Wants=var-lib-ingot-data.mount
+After=var-lib-ingot-data.mount
+
+[Mount]
+What=/var/lib/ingot/data/rancher/config/
+Where=/etc/rancher/
+Type=none
+Options=bind
+SloppyOptions=no
+LazyUnmount=no
+ReadWriteOnly=yes
+ForceUnmount=no

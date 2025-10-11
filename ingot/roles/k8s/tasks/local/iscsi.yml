@@ -1,0 +1,7 @@
+ - name: "[Local>ISCSI] Setting up "
+   ansible.builtin.template:
+     src: "local/iscsi/initiatorname.iscsi.j2"
+     dest: "/etc/iscsi/initiatorname.iscsi"
+     mode: "0600"
+     owner: "root"
+     group: "root"

@@ -1,0 +1,42 @@
+- name: "[Test] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['test']}}"
+  register: ayasuna__ingot__k8s__privates__arguments
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@test"
+
+- name: "[Test] Checking status of k3s.service"
+  ansible.builtin.shell:
+    cmd: "systemctl is-active --quiet k3s.service"
+  changed_when: false
+  failed_when: ayasuna__ingot__k8s__privates__k3s_service_status.rc != 0
+  register: ayasuna__ingot__k8s__privates__k3s_service_status
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@test"
+
+- name: "[Test] Executing shell command '{{ ayasuna__ingot__k8s__privates__command }}'"
+  ansible.builtin.shell:
+    cmd: "{{ ayasuna__ingot__k8s__privates__command }}"
+  loop:
+    - "ip addr"
+    - "nft list ruleset"
+    - "kubectl get nodes -o wide"
+    - "kubectl get pods --all-namespaces"
+    - "cat /etc/systemd/system/k3s.service"
+    - "ls -la /root/.kube/"
+  loop_control:
+    loop_var: "ayasuna__ingot__k8s__privates__command"
+    index_var: "ayasuna__ingot__k8s__privates__command_index"
+  register: ayasuna__ingot__k8s__privates__shell_command_result
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@test"
+
+- name: "[Test] Printing STDOUT of executed shell commands"
+  ansible.builtin.debug:
+    var: ayasuna__ingot__k8s__privates__shell_command_result
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@test"

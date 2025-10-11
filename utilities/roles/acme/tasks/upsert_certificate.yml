@@ -1,0 +1,14 @@
+- ansible.builtin.import_tasks:
+    file: "@upsert/common.yml"
+  vars:
+    ayasuna__utilities__acme__privates__task_name: "upsert_certificate"
+  tags:
+    - "ayasuna__utilities__acme"
+    - "ayasuna__utilities__acme@upsert_certificate"
+
+- ansible.builtin.import_tasks:
+    file: "upsert_certificate/upsert.yml"
+  tags:
+    - "ayasuna__utilities__acme"
+    - "ayasuna__utilities__acme@upsert_certificate"
+    - "ayasuna__utilities__acme@upsert_certificate>upsert"

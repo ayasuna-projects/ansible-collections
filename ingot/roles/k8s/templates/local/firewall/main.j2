@@ -1,0 +1,57 @@
+{% set prepared_arguments = ayasuna__ingot__k8s__privates__arguments.prepared %}
+
+
+chain USER_PREROUTING {
+
+}
+
+chain USER_INPUT {
+    
+    {%+ if prepared_arguments.k3s_node_ipv6_ip is not none +%}
+        
+        iifname { "cni0", "flannel*" } ip6 saddr { {{ prepared_arguments.k3s_cluster_ipv6_service_network }}, {{ prepared_arguments.k3s_cluster_ipv6_pod_network }}, fe80::/10 } counter accept comment "Accept IPv6 packets coming from the CNI or flannel network interface";
+
+        {# TODO: Instead of accepting all input traffic from trusted networks we should probably only accept the traffic that K3s and HostNetwork pods require #}
+        iifname "wan0" ip6 saddr { {{ prepared_arguments.k3s_cluster_ipv6_trusted_networks | join(", ") }} } ip6 daddr {{ prepared_arguments.k3s_node_ipv6_ip }} counter accept comment "Accept IPv6 input traffic from trusted networks";
+        
+    {%+ endif +%}
+
+    {%+ if prepared_arguments.k3s_node_ipv4_ip is not none +%}
+    
+        iifname { "cni0", "flannel*" } ip saddr { {{ prepared_arguments.k3s_cluster_ipv4_service_network }}, {{ prepared_arguments.k3s_cluster_ipv4_pod_network }} } counter accept comment "Accept IPv4 packets coming from the CNI or flannel network interface";
+
+        {# TODO: Instead of accepting all input traffic from trusted networks we should probably only accept the traffic that K3s and HostNetwork pods require #}
+        iifname "wan0" ip saddr { {{ prepared_arguments.k3s_cluster_ipv4_trusted_networks | join(", ") }} } ip daddr {{ prepared_arguments.k3s_node_ipv4_ip }} counter accept comment "Accept IPv4 input traffic from trusted networks";
+        
+    {%+ endif +%}
+}
+
+chain USER_FORWARD {
+
+    {%+ if prepared_arguments.k3s_node_ipv6_ip is not none +%}
+    
+        iifname { "cni0", "flannel*" } ip6 saddr { {{ prepared_arguments.k3s_cluster_ipv6_service_network }}, {{ prepared_arguments.k3s_cluster_ipv6_pod_network }}, fe80::/10 } counter accept comment "Accept IPv6 packets coming from the CNI or flannel network interface";
+
+        {# TODO: Find a way to filter out unwanted traffic e.g. by also validating the source of the traffic #}
+        iifname "wan0" ip6 daddr { {{ prepared_arguments.k3s_cluster_ipv6_pod_network }} } counter accept comment "Accept IPv6 FORWARD traffic targeting '{{ prepared_arguments.k3s_cluster_ipv6_pod_network }}' received on 'wan0'";
+        
+    {%+ endif +%}
+    
+    {%+ if prepared_arguments.k3s_node_ipv4_ip is not none +%}
+    
+        iifname { "cni0", "flannel*" } ip saddr { {{ prepared_arguments.k3s_cluster_ipv4_service_network }}, {{ prepared_arguments.k3s_cluster_ipv4_pod_network }} } counter accept comment "Accept IPv4 packets coming from the CNI or flannel network interface";
+
+        {# TODO: Find a way to filter out unwanted traffic e.g. by also validating the source of the traffic #}
+        iifname "wan0" ip daddr { {{ prepared_arguments.k3s_cluster_ipv4_pod_network }} } counter accept comment "Accept IPv4 FORWARD traffic targeting '{{ prepared_arguments.k3s_cluster_ipv4_pod_network }}' received on 'wan0'";
+
+    {%+ endif +%}
+
+}
+
+chain USER_OUTPUT {
+
+}
+
+chain USER_POSTROUTING {
+
+}

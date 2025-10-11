@@ -1,0 +1,30 @@
+- name: "[Users>User] Ensuring user '{{ ayasuna__utilities__host__privates__user.name }}' exists"
+  ansible.builtin.user:
+    name: "{{ ayasuna__utilities__host__privates__user.name }}"
+    shell: "/bin/bash"
+    create_home: true
+    append: false
+    password: "{{ ayasuna__utilities__host__privates__user.password | string | password_hash('sha512') }}"
+    update_password: "always"
+    state: "present"
+
+- name: "[Users>User] Setting up authorized SSH keys for user '{{ ayasuna__utilities__host__privates__user.name }}'"
+  ansible.posix.authorized_key:
+    user: "{{ ayasuna__utilities__host__privates__user.name }}"
+    key: |-
+      {% for public_key in ayasuna__utilities__host__privates__user.public_keys -%}
+        {{ public_key.type }} {{ public_key.content }} {{ public_key.name }}
+      {%- endfor %}
+    state: "present"
+    exclusive: true
+    manage_dir: true
+  when: (ayasuna__utilities__host__privates__user.public_keys | length) > 0
+
+- name: "[Users>User] Adding sudoers file for user '{{ ayasuna__utilities__host__privates__user.name }}'"
+  ansible.builtin.template:
+    src: "users/sudoers.j2"
+    dest: "/etc/sudoers.d/00-{{ ayasuna__utilities__host__privates__user.name }}"
+    owner: "root"
+    group: "root"
+    mode: "0440"
+  when: ayasuna__utilities__host__privates__user.name != "root"

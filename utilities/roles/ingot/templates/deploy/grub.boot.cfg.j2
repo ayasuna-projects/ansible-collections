@@ -1,0 +1,23 @@
+insmod ext2 # This module adds support for ext4
+insmod part_gpt
+
+search --set=ingot_deployment_fs --no-floppy --fs-uuid {{ ayasuna__utilities__ingot__privates__deploy_blkid_deployment.stdout_lines[0] }}
+
+set timeout=7
+set default=0
+
+set ingot_boot_fs_uuid="{{ ayasuna__utilities__ingot__privates__deploy_blkid_boot.stdout_lines[0] }}"
+set ingot_deployment_fs_uuid="{{ ayasuna__utilities__ingot__privates__deploy_blkid_deployment.stdout_lines[0] }}"
+set ingot_data_fs_uuid="{{ ayasuna__utilities__ingot__privates__deploy_blkid_data.stdout_lines[0] }}"
+
+{%+ for v1_deployment_directory in (ayasuna__utilities__ingot__privates__deploy_deployment_v1_directories.files | map(attribute='path') | sort(reverse=true, case_sensitive=true))[:ayasuna__utilities__ingot__privates__deploy_arguments.prepared.target_partitions_deployment_history] +%}
+
+{% set v1_deployment_id = (v1_deployment_directory | basename) %}
+
+if [ -f "(${ingot_deployment_fs})/v1/{{ v1_deployment_id }}/grub.cfg" ]; then
+    source (${ingot_deployment_fs})/v1/{{ v1_deployment_id }}/grub.cfg
+else
+    echo "/v1/{{ v1_deployment_id }}/grub.cfg is missing, ignoring..."
+fi
+
+{%+ endfor +%}

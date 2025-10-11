@@ -1,0 +1,11 @@
+- name: "[Local>Reload] Including tasks from role 'ayasuna.utilities.udevadm' to reload & apply UDEV ruleset"
+  ansible.builtin.include_role:
+    name: "ayasuna.utilities.udevadm"
+  vars:
+    ayasuna__utilities__udevadm__inputs__reload: true
+    ayasuna__utilities__udevadm__inputs__trigger:
+      - action: "add"
+        type: "devices"
+        match_subsystem: "net"
+    ayasuna__utilities__udevadm__inputs__settle_timeout: 30
+

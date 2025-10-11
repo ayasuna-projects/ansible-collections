@@ -1,0 +1,49 @@
+- name: "[Final] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['final']}}"
+  register: ayasuna__ingot__k8s__privates__arguments
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@final"
+
+- name: "[Final] Starting K3s service"
+  ansible.builtin.systemd_service:
+    name: "k3s.service"
+    enabled: false
+    masked: false
+    daemon_reload: true
+    state: "started"
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@final"
+
+- name: "[Final] Setting up bash completion for kubectl"
+  ansible.builtin.shell:
+    cmd: "kubectl completion bash > /etc/bash_completion.d/kubectl"
+  when: ayasuna__ingot__k8s__privates__arguments.prepared.k3s_node_type == 'server'
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@final"
+
+- name: "[Final] Ensuring directory '/root/.kube/' exists"
+  ansible.builtin.file:
+    path: "/root/.kube/"
+    recurse: false
+    state: "directory"
+    mode: "0750"
+    owner: "root"
+    group: "root"
+  when: ayasuna__ingot__k8s__privates__arguments.prepared.k3s_node_type == 'server'
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@final"
+
+- name: "[Final] Setting up kube-config"
+  ansible.builtin.file:
+    src: "/etc/rancher/k3s/k3s.yaml"
+    dest: "/root/.kube/config"
+    state: "link"
+  when: ayasuna__ingot__k8s__privates__arguments.prepared.k3s_node_type == 'server'
+  tags:
+    - "ayasuna__ingot__k8s"
+    - "ayasuna__ingot__k8s@final"

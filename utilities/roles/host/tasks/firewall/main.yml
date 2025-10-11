@@ -1,0 +1,7 @@
+- name: "[Firewall] Creating firewall configuration file"
+  ansible.builtin.template:
+    src: "firewall/nftables.conf.j2"
+    dest: "/etc/nftables.conf"
+    owner: "root"
+    group: "root"
+    mode: "0644"

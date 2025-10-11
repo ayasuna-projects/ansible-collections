@@ -1,0 +1,14 @@
+[Match]
+Name=wan0p{{ ayasuna__ingot__k8s__privates__wan_port_index }}
+
+[Network]
+Bond=wan0
+PrimarySlave={{ 'yes' if ayasuna__ingot__k8s__privates__wan_port_index == 0 else 'no' }}
+LinkLocalAddressing=no
+IPv6AcceptRA=no
+IPv6SendRA=no
+DHCP=no
+DNSDefaultRoute=no
+LLDP=no
+EmitLLDP=no
+DHCPPrefixDelegation=no

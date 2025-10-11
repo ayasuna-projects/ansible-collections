@@ -1,0 +1,18 @@
+- name: "[Packages] Preparing arguments"
+  ayasuna.utilities.prepare_arguments:
+    specification: "{{(lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['firewall']}}"
+  register: ayasuna__utilities__host__privates__arguments
+  tags:
+    - "ayasuna__utilities__host"
+    - "ayasuna__utilities__host@firewall"
+
+- name: "[Packages] Including tasks from firewall/main.yml to create the firewall configuration file"
+  ansible.builtin.include_tasks:
+    file: "firewall/main.yml"
+    apply:
+      tags:
+        - "ayasuna__utilities__host"
+        - "ayasuna__utilities__host@firewall"
+  tags:
+    - "ayasuna__utilities__host"
+    - "ayasuna__utilities__host@firewall"

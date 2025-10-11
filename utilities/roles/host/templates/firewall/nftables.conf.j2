@@ -1,0 +1,192 @@
+#!/usr/sbin/nft -f
+
+{% set firewall_args = ayasuna__utilities__host__privates__arguments.prepared %}
+
+{# 
+The base chain priorities have been chosen in such a way that they have the highest possible priority, after their default location, 
+for their hook kind without "conflicting" with any netfilter internal operation that may or may not be evaluated for any given hook.   
+#}
+{% set filter_all_chain_priority = 49 %} {# 49 is the priority before NF_IP_PRI_SECURITY, default: 0/NF_IP_PRI_FILTER #}
+{% set prerouting_input_chain_priority = -101 %} {# -101 is the priority before NF_IP_PRI_NAT_DST which *may* also have a prerouting hook, default: -150/NF_IP_PRI_MANGLE #}
+{% set postrouting_output_chain_priority = 224 %} {# 224 is the priority before NF_IP_PRI_SELINUX_LAST which *may* also have a postrouting hook, default: 100/NF_IP_PRI_NAT_SRC  #}
+
+{# 
+Ensure the table exists first before deleting it because otherwise the deletion will fail.
+If the table already exists this will do nothing if it doesn't this will just create an empty table 
+#}
+table inet AYASUNA_UTILITIES_HOST
+delete table inet AYASUNA_UTILITIES_HOST
+
+table inet AYASUNA_UTILITIES_HOST {
+
+    {%+ for definition in firewall_args.definitions +%}
+
+        {{ definition }}
+        
+    {%+ endfor +%}
+
+    {% if "filter@input.default" in firewall_args.presets %}
+        
+        # This chain handles the OK ICMPv6 packets for INPUT (RFC4890) and drops all others
+        chain SYSTEM_INPUT_ICMPV6 {
+            
+            icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem } counter accept comment "Accept ICMP packets that are integral for connection establishment and maintenance (RFC4890, 4.4.1, 4.4.2)";
+            
+            # echo-reply is actually handled before the connection track 'invalid' rule in the 'SYSTEM_INPUT_BEFORE' chain but to be exhaustive we add it here too
+            icmpv6 type { echo-request, echo-reply } counter accept comment "Accept ICMP packets are used for connectivity checking (RFC4890, 4.4.1)";
+            
+            icmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, ind-neighbor-solicit, ind-neighbor-advert } ip6 hoplimit 255 counter accept comment "Accept ICMP packets that are required for node configuration (RFC4890, 4.4.1)";
+            
+            icmpv6 type { mld-listener-query, mld-listener-report, mld-listener-done, mld2-listener-report } ip6 saddr fe80::/10 counter accept comment "Accept link-local multicast receiver notification messages (RFC4890, 4.4.1)";
+            
+            icmpv6 code { 148, 149 } ip6 hoplimit 255 counter accept comment "Accept SEND certificate path notification messages (RFC4890, 4.4.1)";
+            
+            icmpv6 code { 151, 152, 153 } ip6 saddr fe80::/10 ip6 hoplimit 1 counter accept comment "Accept multicast router discovery messages (RFC4890, 4.4.1)";
+            
+            limit rate 20/minute log level debug prefix "[SYSTEM_INPUT_ICMPV6] Dropping packet: " comment "Log all other ICMP packets before dropping them";
+            counter drop;
+        }
+
+        # This chain handles the OK ICMPv4 packets for INPUT and drops all others
+        chain SYSTEM_INPUT_ICMPV4 {
+    
+            icmp type { destination-unreachable, echo-request, time-exceeded, parameter-problem } counter accept comment "Accept OK ICMP packets";
+    
+            limit rate 20/minute log level debug prefix "[SYSTEM_INPUT_ICMPV4] Dropping packet: " comment "Log all other ICMP packets before dropping them";
+            counter drop;
+        }
+        
+    {% endif %}
+
+    chain SYSTEM_OUTPUT_BEFORE {
+    
+    }
+
+    # This chain is meant to be jumped to **after** any custom output rules if they did not end with a verdict
+    chain SYSTEM_OUTPUT_AFTER {
+        counter comment "Count accepted packets";
+    }
+
+    # This chain is meant to be jumped to **before** any custom input rules
+    chain SYSTEM_INPUT_BEFORE {
+        {% if "filter@input.default" in firewall_args.presets %}
+            
+            ct state {established, related} counter accept comment "Accept all established and related connections";
+
+            # Accept ping replies, we accept them here as multicast ping replies are part of the OK ICMP codes (RFC4890) but might be received with an 'invalid' connection state
+            icmpv6 type echo-reply counter accept comment "Accept ping replies (RFC4890, 4.4.1)";
+
+            ct state invalid counter drop comment "Drop all invalid packets";
+
+            iif lo accept comment "Accept requests from loopback";
+            iif != lo ip daddr 127.0.0.1/8 counter drop comment "Drop connections to loopback not coming from the loopback interface";
+            iif != lo ip6 daddr ::1/128 counter drop comment "Drop connections to loopback not coming from the loopback interface";
+
+            meta l4proto icmpv6 counter jump SYSTEM_INPUT_ICMPV6 comment "Handle ICMPv6 packets";
+            meta l4proto icmp counter jump SYSTEM_INPUT_ICMPV4 comment "Handle ICMP packets";
+            
+        {% endif %}
+
+        {% if "filter@input.ssh" in firewall_args.presets  %}
+            
+            tcp dport 22 counter accept comment "Accept SSH connections";
+            
+        {% endif %} 
+
+    }
+
+    chain SYSTEM_INPUT_AFTER {
+
+        {% if "filter@log" in firewall_args.presets %}
+            limit rate 20/minute log level debug prefix "[SYSTEM_INPUT_AFTER] Dropping packet: " comment "Log dropped packets";
+        {% endif %}
+
+        counter drop;
+    }
+
+    chain SYSTEM_FORWARD_BEFORE {
+
+        {% if "filter@forward.default" in firewall_args.presets %}
+            ct state {established, related} counter accept comment "Accept all established and related connections";
+            ct state invalid counter drop comment "Drop all invalid packets";
+        {% endif %}
+
+    }
+
+    # This chain is meant to be jumped to **after** any custom forward rules if they did not end with a verdict
+    chain SYSTEM_FORWARD_AFTER {
+
+        {% if "filter@log" in firewall_args.presets %}
+            limit rate 20/minute log level debug prefix "[SYSTEM_FORWARD_AFTER] Dropping packet: " comment "Log dropped packets";
+        {% endif %}
+
+        counter drop;
+    }
+
+    # Prerouting chains are not meant for filtering so the default policy is accept
+    chain SYSTEM_PREROUTING {
+        type filter hook prerouting priority {{ prerouting_input_chain_priority }}; policy accept;
+
+        {%+ for chain_name in firewall_args.prerouting_chains +%}
+            
+            jump {{ chain_name }};
+        
+        {%+ endfor +%}
+    }
+
+    # Accept all outgoing packets by default, the output base chain is meant to be used primarily as a blacklist
+    chain SYSTEM_OUTPUT {
+        type filter hook output priority {{ filter_all_chain_priority }}; policy accept;
+
+        jump SYSTEM_OUTPUT_BEFORE;
+
+        {%+ for chain_name in firewall_args.output_chains +%}
+        
+            jump {{ chain_name }};
+        
+        {%+ endfor +%}
+
+        jump SYSTEM_OUTPUT_AFTER;
+    }
+
+    # Drop all incoming packets by default, the input base chain is meant to be used primarily as a whitelist
+    chain SYSTEM_INPUT {
+        type filter hook input priority {{ filter_all_chain_priority }}; policy drop;
+
+        jump SYSTEM_INPUT_BEFORE;
+
+        {%+ for chain_name in firewall_args.input_chains +%}
+        
+            jump {{ chain_name }};
+        
+        {%+ endfor +%}
+
+        jump SYSTEM_INPUT_AFTER;
+    }
+
+    # Don't forward packets by default, the forward base chain is meant to be used primarily as a whitelist
+    chain SYSTEM_FORWARD {
+        type filter hook forward priority {{ filter_all_chain_priority }}; policy drop;
+
+        jump SYSTEM_FORWARD_BEFORE;
+
+        {%+ for chain_name in firewall_args.forward_chains +%}
+        
+            jump {{ chain_name }};
+        
+        {%+ endfor +%}
+
+        jump SYSTEM_FORWARD_AFTER;
+    }
+
+    # Postrouting chains are not meant for filtering so the default policy is accept
+    chain SYSTEM_POSTROUTING {
+        type nat hook postrouting priority {{ postrouting_output_chain_priority }}; policy accept;
+
+        {%+ for chain_name in firewall_args.postrouting_chains +%}
+        
+            jump {{ chain_name }};
+        
+        {%+ endfor +%}
+    }
+}

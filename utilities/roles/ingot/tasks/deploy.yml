@@ -1,0 +1,17 @@
+- ayasuna.utilities.prepare_arguments:
+    specification: "{{ (lookup('ansible.builtin.file', role_path + '/meta/argument_specs.yml') | from_yaml)['argument_specs']['deploy'] }}"
+  register: ayasuna__utilities__ingot__privates__deploy_arguments
+  tags:
+    - "ayasuna__utilities__ingot"
+    - "ayasuna__utilities__ingot@deploy"
+
+- name: "[Build] Including tasks from deploy/main.yml to deploy the ingot"
+  ansible.builtin.include_tasks:
+    file: "deploy/main.yml"
+    apply:
+      tags:
+        - "ayasuna__utilities__ingot"
+        - "ayasuna__utilities__ingot@deploy"
+  tags:
+    - "ayasuna__utilities__ingot"
+    - "ayasuna__utilities__ingot@deploy"

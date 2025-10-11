@@ -1,0 +1,7 @@
+- name: "[Local>SSH] Including tasks from role 'ayasuna.utilities.host' to configure the SSH service"
+  ansible.builtin.include_role:
+    name: "ayasuna.utilities.host"
+    tasks_from: "ssh.yml"
+  vars:
+    ayasuna__utilities__host__inputs__host_key_directory: "/var/lib/ingot/data/ssh/"
+

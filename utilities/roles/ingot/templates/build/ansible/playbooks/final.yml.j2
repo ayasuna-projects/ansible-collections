@@ -1,0 +1,10 @@
+- name: "Final"
+  connection: "local"
+  hosts: "localhost"
+  serial: 1
+  gather_facts: true
+  tasks:
+    - name: "[Final] Including 'final.yml' tasks from role '{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.build_ansible_role_fqn }}'"
+      ansible.builtin.include_role:
+        name: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.build_ansible_role_fqn }}"
+        tasks_from: "final.yml"

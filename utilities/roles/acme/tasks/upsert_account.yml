@@ -1,0 +1,14 @@
+- ansible.builtin.import_tasks:
+    file: "@upsert/common.yml"
+  vars:
+    ayasuna__utilities__acme__privates__task_name: "upsert_account"
+  tags:
+    - "ayasuna__utilities__acme"
+    - "ayasuna__utilities__acme@upsert_account"
+
+- ansible.builtin.import_tasks:
+    file: "upsert_account/upsert.yml"
+  tags:
+    - "ayasuna__utilities__acme"
+    - "ayasuna__utilities__acme@upsert_account"
+    - "ayasuna__utilities__acme@upsert_account>upsert"

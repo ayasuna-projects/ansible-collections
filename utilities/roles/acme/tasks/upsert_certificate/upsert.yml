@@ -1,0 +1,143 @@
+- name: "[Upsert Certificate>Upsert] Determining certificate paths for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+  ansible.builtin.set_fact:
+    ayasuna__utilities__acme__privates__certificate_key_path: "{{ ayasuna__utilities__acme__privates__certificates_path }}/{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}.key"
+    ayasuna__utilities__acme__privates__certificate_crt_path: "{{ ayasuna__utilities__acme__privates__certificates_path }}/{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}.crt"
+    ayasuna__utilities__acme__privates__certificate_csr_path: "{{ ayasuna__utilities__acme__privates__certificates_path }}/{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}.csr"
+    ayasuna__utilities__acme__privates__certificate_full_chain_path: "{{ ayasuna__utilities__acme__privates__certificates_path }}/{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}-full.crt"
+    ayasuna__utilities__acme__privates__certificate_intermediate_chain_path: "{{ ayasuna__utilities__acme__privates__certificates_path }}/{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}-intermediate.crt"
+
+- name: "[Upsert Certificate>Upsert] Checking if the certificate key for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }} needs to be created"
+  ansible.builtin.stat:
+    path: "{{ ayasuna__utilities__acme__privates__certificate_key_path }}"
+  register: ayasuna__utilities__acme__privates__certificate_key_path_stat_result
+
+- name: "[Upsert Certificate>Upsert] Creating certificate key for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+  ansible.builtin.openssl_privatekey:
+    path: "{{ ayasuna__utilities__acme__privates__certificate_key_path }}"
+    passphrase: "{{ ayasuna__utilities__acme__privates__arguments.prepared.password }}"
+    cipher: "auto"
+    curve: "secp384r1"
+    type: "ECC"
+    force: false
+  when: not ayasuna__utilities__acme__privates__certificate_key_path_stat_result.stat.exists
+
+- name: "[Upsert Certificate>Upsert] Creating certificate signing request for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+  ansible.builtin.openssl_csr:
+    path: "{{ ayasuna__utilities__acme__privates__certificate_csr_path }}"
+    privatekey_path: "{{ ayasuna__utilities__acme__privates__certificate_key_path }}"
+    privatekey_passphrase: "{{ ayasuna__utilities__acme__privates__arguments.prepared.password }}"
+    common_name: "{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+    subject_alt_name: "{{ ( [ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name ] + ayasuna__utilities__acme__privates__arguments.prepared.certificate_subject_alternative_names ) | map('regex_replace', '^', 'DNS:') | list }}"
+    use_common_name_for_san: false
+    force: false
+    digest: "sha256"
+    state: "present"
+  register: ayasuna__utilities__acme__privates__certificate_csr
+    
+- name: "[Upsert Certificate>Upsert] Creating ACME certificate challenge for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+  ansible.builtin.acme_certificate:
+    account_key_src: "{{ ayasuna__utilities__acme__privates__account_key_path }}"
+    account_key_passphrase: "{{ ayasuna__utilities__acme__privates__arguments.prepared.password }}"
+    acme_directory: "{{ ayasuna__utilities__acme__privates__arguments.prepared.acme_directory }}"
+    acme_version: 2
+    validate_certs: true
+    modify_account: false
+    deactivate_authzs: false
+    retrieve_all_alternates: false
+    force: "{{ ayasuna__utilities__acme__privates__certificate_csr is changed }}"
+    remaining_days: "{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_renew_threshold }}"
+    challenge: "dns-01"
+    csr: "{{ ayasuna__utilities__acme__privates__certificate_csr_path }}"
+    dest: "{{ ayasuna__utilities__acme__privates__certificate_crt_path }}"
+    chain_dest: "{{ ayasuna__utilities__acme__privates__certificate_intermediate_chain_path }}"
+    fullchain_dest: "{{ ayasuna__utilities__acme__privates__certificate_full_chain_path }}"
+  register: ayasuna__utilities__acme__privates__certificate_challenge
+
+- name: "[Upsert Certificate>Upsert] Setting TXT records to solve ACME certificate challenge for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+  community.dns.hetzner_dns_record_set:
+    hetzner_token: "{{ ayasuna__utilities__acme__privates__arguments.prepared.hetzner_token }}"
+    zone: "{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_zone }}"
+    record: "{{ item.key }}"
+    state: "present"
+    on_existing: "replace"
+    type: "TXT"
+    txt_transformation: "unquoted"
+    ttl: 60
+    value: "{{ item.value }}"
+  loop: "{{ ayasuna__utilities__acme__privates__certificate_challenge.challenge_data_dns | dict2items }}"
+  when: ayasuna__utilities__acme__privates__certificate_challenge is changed
+
+- name: "[Upsert Certificate>Upsert] Waiting 15 seconds to ensure the created TXT records have been replicated for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+  ansible.builtin.wait_for:
+    timeout: 15
+  when: ayasuna__utilities__acme__privates__certificate_challenge is changed
+
+- block:
+    - name: "[Upsert Certificate>Upsert] Validating certificate challenge and retrieving certificate for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+      ansible.builtin.acme_certificate:
+        account_key_src: "{{ ayasuna__utilities__acme__privates__account_key_path }}"
+        account_key_passphrase: "{{ ayasuna__utilities__acme__privates__arguments.prepared.password }}"
+        acme_directory: "{{ ayasuna__utilities__acme__privates__arguments.prepared.acme_directory }}"
+        acme_version: 2
+        validate_certs: true
+        modify_account: false
+        deactivate_authzs: false
+        retrieve_all_alternates: false
+        force: "{{ ayasuna__utilities__acme__privates__certificate_csr is changed }}" 
+        remaining_days: "{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_renew_threshold }}"
+        challenge: "dns-01"
+        csr: "{{ ayasuna__utilities__acme__privates__certificate_csr_path }}"
+        dest: "{{ ayasuna__utilities__acme__privates__certificate_crt_path }}"
+        chain_dest: "{{ ayasuna__utilities__acme__privates__certificate_intermediate_chain_path }}"
+        fullchain_dest: "{{ ayasuna__utilities__acme__privates__certificate_full_chain_path }}"
+        data: "{{ ayasuna__utilities__acme__privates__certificate_challenge }}"
+      when: ayasuna__utilities__acme__privates__certificate_challenge is changed
+  always:
+  - name: "[Upsert Certificate>Upsert] Removing previously created TXT records to solve ACME certificate challenge for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+    community.dns.hetzner_dns_record_set:
+      hetzner_token: "{{ ayasuna__utilities__acme__privates__arguments.prepared.hetzner_token }}"
+      zone: "{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_zone }}"
+      record: "{{ item.key }}"
+      state: "absent"
+      on_existing: "replace"
+      type: "TXT"
+      txt_transformation: "unquoted"
+      ttl: 60
+    loop: "{{ ayasuna__utilities__acme__privates__certificate_challenge.challenge_data_dns | dict2items }}"
+    when: ayasuna__utilities__acme__privates__certificate_challenge is changed
+
+- name: "[Upsert Certificate>Upsert] Creating temporary file to store the decrypted certificate key in"
+  ansible.builtin.tempfile:
+    state: "file"
+  register: ayasuna__utilities__acme__privates__certificate_temporary_key_path
+  
+- name: "[Upsert Certificate>Upsert] Decrypting certificate key of {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+  ansible.builtin.shell:
+    cmd: "openssl ec -in {{ ayasuna__utilities__acme__privates__certificate_key_path }} -out {{ ayasuna__utilities__acme__privates__certificate_temporary_key_path.path }} -passin pass:\"{{ ayasuna__utilities__acme__privates__arguments.prepared.password }}\""
+
+- name: "[Upsert Certificate>Upsert] Reading created/updated full chain for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }} into memory"
+  ansible.builtin.slurp:
+    src: "{{ ayasuna__utilities__acme__privates__certificate_full_chain_path }}"
+  register: ayasuna__utilities__acme__privates__certificate_full_chain
+
+- name: "[Upsert Certificate>Upsert] Reading created/updated intermediate chain for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }} into memory"
+  ansible.builtin.slurp:
+    src: "{{ ayasuna__utilities__acme__privates__certificate_intermediate_chain_path }}"
+  register: ayasuna__utilities__acme__privates__certificate_intermediate_chain
+
+- name: "[Upsert Certificate>Upsert] Reading created/updated certificate for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }} into memory"
+  ansible.builtin.slurp:
+    src: "{{ ayasuna__utilities__acme__privates__certificate_crt_path }}"
+  register: ayasuna__utilities__acme__privates__certificate_crt
+  
+- name: "[Upsert Certificate>Upsert] Reading created/updated private key for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }} into memory"
+  ansible.builtin.slurp:
+    src: "{{ ayasuna__utilities__acme__privates__certificate_temporary_key_path.path }}"
+  register: ayasuna__utilities__acme__privates__certificate_key
+  
+- name: "[Upsert Certificate>Upsert] Setting output variables for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
+  ansible.builtin.set_fact:
+    ayasuna__utilities__acme__outputs__certificate: "{{ ayasuna__utilities__acme__privates__certificate_crt['content'] | b64decode }}"
+    ayasuna__utilities__acme__outputs__private_key: "{{ ayasuna__utilities__acme__privates__certificate_key['content'] | b64decode }}"
+    ayasuna__utilities__acme__outputs__full_chain: "{{ ayasuna__utilities__acme__privates__certificate_full_chain['content'] | b64decode }}"
+    ayasuna__utilities__acme__outputs__intermediate_chain: "{{ ayasuna__utilities__acme__privates__certificate_intermediate_chain['content'] | b64decode }}"
