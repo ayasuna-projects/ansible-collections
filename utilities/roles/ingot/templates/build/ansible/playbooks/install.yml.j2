@@ -822,6 +822,13 @@
       ansible.builtin.shell:
         cmd: "update-initramfs -u -k all"
 
+    # We're removing the grub.cfg because this will lead to the /etc/kernel/postinst.d/zz-update-grub & /etc/kernel/postrm.d/zz-update-grub hooks to being no-ops 
+    # and not fail IF they are triggered for whatever reason (e.g. a temporary apt upgrade which brings a new kernel version along with it).
+    - name: "[Install] Removing '/boot/grub/grub.cfg'"
+      ansible.builtin.file:
+        path: "/boot/grub/grub.cfg"
+        state: "absent"
+
     # TODO: We should consider cleaning the image after the install.yml has run (e.g. removing unnecessary files from the /boot directory)
     - name: "[Install] Including 'install.yml' tasks from role '{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.build_ansible_role_fqn }}'"
       ansible.builtin.include_role:
