@@ -39,10 +39,14 @@ argument_specs:
         description: "The ACME (v2) directory to use"
         type: "str"
         default: "https://acme-staging-v02.api.letsencrypt.org/directory"
-      ayasuna__utilities__acme__inputs__hetzner_token:
-        description: "The hetzner API token to use"
+      ayasuna__utilities__acme__inputs__hetzner_api_token:
+        description: "The hetzner cloud API token to use"
         type: "str"
         required: true
+      ayasuna__utilities__acme__inputs__hetzner_api_endpoint:
+        description: "The hetzner cloud API endpoint to use"
+        type: "str"
+        default: "https://api.hetzner.cloud/v1"
       ayasuna__utilities__acme__inputs__certificate_zone:
         description: "The name of the (Hetzner) DNS zone to add the TXT records to so that the the ACME challenge can be solved"
         type: "str"

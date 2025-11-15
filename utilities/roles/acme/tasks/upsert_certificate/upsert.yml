@@ -54,16 +54,15 @@
   register: ayasuna__utilities__acme__privates__certificate_challenge
 
 - name: "[Upsert Certificate>Upsert] Setting TXT records to solve ACME certificate challenge for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
-  community.dns.hetzner_dns_record_set:
-    hetzner_token: "{{ ayasuna__utilities__acme__privates__arguments.prepared.hetzner_token }}"
+  hetzner.hcloud.zone_rrset:
+    api_endpoint: "{{ ayasuna__utilities__acme__privates__arguments.prepared.hetzner_api_endpoint }}"
+    api_token: "{{ ayasuna__utilities__acme__privates__arguments.prepared.hetzner_api_token }}"
     zone: "{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_zone }}"
-    record: "{{ item.key }}"
-    state: "present"
-    on_existing: "replace"
+    name: "{{ item.key | regex_replace('.' + ayasuna__utilities__acme__privates__arguments.prepared.certificate_zone + '$', '') }}"
     type: "TXT"
-    txt_transformation: "unquoted"
+    records: "{{ item.value | map('regex_replace', '^(.*)$', '\"\\1\"') | map('community.general.dict_kv', 'value') }}"
+    state: "present"
     ttl: 60
-    value: "{{ item.value }}"
   loop: "{{ ayasuna__utilities__acme__privates__certificate_challenge.challenge_data_dns | dict2items }}"
   when: ayasuna__utilities__acme__privates__certificate_challenge is changed
 
@@ -94,14 +93,13 @@
       when: ayasuna__utilities__acme__privates__certificate_challenge is changed
   always:
   - name: "[Upsert Certificate>Upsert] Removing previously created TXT records to solve ACME certificate challenge for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
-    community.dns.hetzner_dns_record_set:
-      hetzner_token: "{{ ayasuna__utilities__acme__privates__arguments.prepared.hetzner_token }}"
+    hetzner.hcloud.zone_rrset:
+      api_endpoint: "{{ ayasuna__utilities__acme__privates__arguments.prepared.hetzner_api_endpoint }}" 
+      api_token: "{{ ayasuna__utilities__acme__privates__arguments.prepared.hetzner_api_token }}"
       zone: "{{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_zone }}"
-      record: "{{ item.key }}"
-      state: "absent"
-      on_existing: "replace"
+      name: "{{ item.key | regex_replace('.' + ayasuna__utilities__acme__privates__arguments.prepared.certificate_zone + '$', '') }}"
       type: "TXT"
-      txt_transformation: "unquoted"
+      state: "absent"
       ttl: 60
     loop: "{{ ayasuna__utilities__acme__privates__certificate_challenge.challenge_data_dns | dict2items }}"
     when: ayasuna__utilities__acme__privates__certificate_challenge is changed
