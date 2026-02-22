@@ -2,8 +2,8 @@
   ansible.builtin.set_fact:
     ayasuna__utilities__ingot__privates__build_installer_iso_sources:
       "debian:13-amd64":
-        url: "https://cdimage.debian.org/cdimage/archive/13.1.0/amd64/iso-cd/debian-13.1.0-amd64-netinst.iso"
-        checksum: "sha512:https://cdimage.debian.org/cdimage/archive/13.1.0/amd64/iso-cd/SHA512SUMS"
+        url: "https://cdimage.debian.org/cdimage/archive/13.2.0/amd64/iso-cd/debian-13.2.0-amd64-netinst.iso"
+        checksum: "sha512:https://cdimage.debian.org/cdimage/archive/13.2.0/amd64/iso-cd/SHA512SUMS"
 
 - name: "[Build] Unmounting directory (if it is mounted) from a previous build as it conflicts with this build"
   ansible.posix.mount:

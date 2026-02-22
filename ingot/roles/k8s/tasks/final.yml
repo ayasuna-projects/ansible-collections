@@ -13,6 +13,8 @@
     masked: false
     daemon_reload: true
     state: "started"
+  retries: 4
+  delay: 5
   tags:
     - "ayasuna__ingot__k8s"
     - "ayasuna__ingot__k8s@final"
