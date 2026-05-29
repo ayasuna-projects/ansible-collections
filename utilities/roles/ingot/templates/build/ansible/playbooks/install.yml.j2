@@ -51,7 +51,13 @@
           value: "0"
         - name: "net.ipv6.conf.default.accept_source_route"
           value: "0"
-
+        # Set sane values for fs.inotify.* parameters
+        - name: "fs.inotify.max_user_instances"
+          value: "8192"
+        - name: "fs.inotify.max_queued_events"
+          value: "32768"
+        - name: "fs.inotify.max_user_watches"
+          value: "262144"
       loop_control:
         loop_var: "install__privates__sysctl"
         index_var: "install__privates__sysctl_index"
