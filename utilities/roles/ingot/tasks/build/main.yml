@@ -187,7 +187,7 @@
           truncate -s 0 "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/etc/machine-id"
           ln -s "../../../etc/machine-id" "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/var/lib/dbus/machine-id"
           
-          rm -r "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/var/log/journal/*"
+          rm -r "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/var/log/journal/"*
         executable: "/bin/bash"
 
     - name: "[Build] Creating squashfs image (ingot) from root filesystem of built disk image"
