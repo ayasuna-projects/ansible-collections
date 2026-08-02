@@ -122,6 +122,7 @@ class _InitialPreparer(_Preparer):
         """
         self._templar = templar
         self._validator = ArgumentSpecValidator(argument_spec_options)
+        self._argument_spec_options = argument_spec_options
         self._prefixes = prefixes
 
     def prepare(self, arguments: dict) -> _PreparationResult:
@@ -131,10 +132,24 @@ class _InitialPreparer(_Preparer):
         if validation_result.error_messages:
             return _PreparationResult(validation_result.error_messages, {})
 
-        prepared_arguments = {}
+        prepared_arguments = self._remove_prefix(arguments)
+        prepared_argument_spec = self._remove_prefix(self._argument_spec_options)
 
-        for key, value in arguments.items():
-            
+        validate_rules_result = self._validate_rules(prepared_arguments, prepared_argument_spec, [])
+
+        return _PreparationResult(validate_rules_result, prepared_arguments)
+
+    def _remove_prefix(self, source: dict[str, Any]) -> dict[str, Any]:
+        """
+        Creates a new dictionary that is based on the given 'source'.
+        The first prefix that matches out of the _prefixes is removed from each key before it is added to the new dictionary.
+        :param source: The source dictionary
+        :return: The new dictionary
+        """
+        result = {}
+
+        for key, value in source.items():
+
             matching_prefix = None
             for prefix in self._prefixes:
                 if key.startswith(prefix):
@@ -142,13 +157,11 @@ class _InitialPreparer(_Preparer):
                     break
 
             if matching_prefix is None:
-                prepared_arguments[key] = copy.deepcopy(value)
+                result[key] = copy.deepcopy(value)
             else:
-                prepared_arguments[key[len(matching_prefix):]] = copy.deepcopy(value)
-            
-        validate_rules_result = self._validate_rules(prepared_arguments, self._validator.argument_spec, [])
+                result[key[len(matching_prefix):]] = copy.deepcopy(value)
 
-        return _PreparationResult(validate_rules_result, prepared_arguments)
+        return result
 
     def _validate_rules(self, arguments: dict[str, Any], argument_spec_options: dict[str, Any], indices: list[int]) -> List[str]:
         """

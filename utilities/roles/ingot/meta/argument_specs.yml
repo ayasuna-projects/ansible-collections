@@ -247,6 +247,8 @@ argument_specs:
           rules:
             - expression: "arguments.working_directory.endswith('/')"
               message: "The working directory must end with a '/'"
+            - expression: "arguments.working_directory is ansible.builtin.match('^[a-zA-Z0-9_\\-/]+$')"
+              message: "The working directory must match the regex '^[a-zA-Z0-9_\\-/]+$'"
       ayasuna__utilities__ingot__inputs__target_file:
         description: |
           The path to which the created ingot is copied after a successful test. 
