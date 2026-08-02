@@ -175,6 +175,21 @@
         fstype: "ext4"
         state: "ephemeral"
 
+    # We're running these cleanup tasks outside the VM as clearing the machine-id *might* have unintended sideffects while the system is running,
+    # additionally we can't really purge the journal (which was created for the machine-id we no longer want to use) while the system is running
+    # https://manpages.debian.org/trixie/systemd/machine-id.5.en.html
+    - name: "[Build] Cleaning up built disk image before squashfs image (ingot) creation"
+      ansible.builtin.shell:
+        cmd: |
+          set -euxo pipefail
+          
+          rm "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/var/lib/dbus/machine-id"
+          truncate -s 0 "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/etc/machine-id"
+          ln -s "../../../etc/machine-id" "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/var/lib/dbus/machine-id"
+          
+          rm -r "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/var/log/journal/*"
+        executable: "/bin/bash"
+
     - name: "[Build] Creating squashfs image (ingot) from root filesystem of built disk image"
       ansible.builtin.shell:
         cmd: "mksquashfs {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/ {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/root.squashfs -xattrs -comp gzip -b 128k -e {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/dev/** -e {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/sys/** -e {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/tmp/** -e {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/proc/** -e {{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/mnt/run/**"
