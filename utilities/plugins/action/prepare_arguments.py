@@ -135,7 +135,7 @@ class _InitialPreparer(_Preparer):
         prepared_arguments = self._remove_prefix(arguments)
         prepared_argument_spec = self._remove_prefix(self._argument_spec_options)
 
-        validate_rules_result = self._validate_rules(prepared_arguments, prepared_argument_spec, [])
+        validate_rules_result = self._validate_rules(prepared_arguments, prepared_arguments, prepared_argument_spec, [])
 
         return _PreparationResult(validate_rules_result, prepared_arguments)
 
@@ -163,7 +163,7 @@ class _InitialPreparer(_Preparer):
 
         return result
 
-    def _validate_rules(self, arguments: dict[str, Any], argument_spec_options: dict[str, Any], indices: list[int]) -> List[str]:
+    def _validate_rules(self, all_arguments: dict[str, Any], arguments: dict[str, Any], argument_spec_options: dict[str, Any], indices: list[int]) -> List[str]:
         """
         Validates the custom rules provided in the 'context' field of a parameter
         """
@@ -191,7 +191,7 @@ class _InitialPreparer(_Preparer):
                             expression_result = self._templar.evaluate_expression(trust_as_template(rule["expression"]),
                                                                                   local_variables={
                                                                                       "indices": indices,
-                                                                                      "arguments": arguments
+                                                                                      "arguments": all_arguments
                                                                                   },
                                                                                   escape_backslashes=True)
 
@@ -225,10 +225,10 @@ class _InitialPreparer(_Preparer):
                                 new_indices = indices.copy()
                                 new_indices.append(index)
 
-                                result.extend(self._validate_rules(current_argument_element, argument_spec_option["options"], new_indices))
+                                result.extend(self._validate_rules(all_arguments, current_argument_element, argument_spec_option["options"], new_indices))
 
                     else:
-                        result.extend(self._validate_rules(current_argument, argument_spec_option["options"], indices))
+                        result.extend(self._validate_rules(all_arguments, current_argument, argument_spec_option["options"], indices))
 
         return result
 
