@@ -10,7 +10,7 @@ This section defines the documentation style and process of the project.
 
 - The documentation of the project is generally written and managed by an AI agent. It is intended for both human and AI agent consumption.
 - Human readability takes precedence over AI agent readability.
-- The documentation describes the API and specification of the project. It does not describe implementation details (those are held in `AGENTS.md`).
+- The documentation covers the API and specification of the project. It may also include implementation details that are relevant for human readers, any information intended specifically for AI agents however should be placed in `AGENTS.md`.
 
 ### Structure of `CONTRIBUTING.md`
 
@@ -55,8 +55,8 @@ This section defines the documentation style and process of the project.
 - There is a single `index entry` for each file within `docs/` (including assets), except for the `docs/INDEX.md` file itself.
 - Each `index entry` consists of:
   - A link to the file it is for
-    - For documents (Markdown files) `<link name>` in `[<link name>](<path to file>)` is equal to `<path to file>`
-    - For assets the `<link name>` in `[<link name>](<path to file>)` is equal to `<path to file>` minus the `.asset/` prefix
+    - For documents (Markdown files) `<link_name>` in `[<link_name>](<path_to_file>)` is equal to `<path_to_file>`
+    - For assets the `<link_name>` in `[<link_name>](<path_to_file>)` is equal to `<path_to_file>` minus the `.assets/` prefix
   - A short summary, at most two sentences long, of the contents of the linked file
   - 1 to 5 keywords that are related to the contents of the file
     - The keywords are always written in lowercase
@@ -92,9 +92,9 @@ The structure of the index file is as follows.
 
 ### Linking
 
-- When referencing other files of the documentation, links of the form `[<link name>](<path to file>)` must be used.
+- When referencing other files of the documentation, links of the form `[<link_name>](<path_to_file>)` must be used.
 - Link paths must be relative to the file that contains the link.
-- The `<link name>` in `[<link name>](<path to file>)` does not need to be the name of the referenced file if another term (or sequence of terms) makes more sense in the current context.
+- The `<link_name>` in `[<link_name>](<path_to_file>)` does not need to be the name of the referenced file if another term (or sequence of terms) makes more sense in the current context.
 
 ### Entry points: `README.md` and `AGENTS.md`
 
@@ -110,7 +110,7 @@ The project root directory holds two entry point files with distinct roles.
 - The `linting` process is responsible for cleaning up the documentation. This includes (partial) restructurings as necessary. Any restructuring must keep `docs/INDEX.md` in sync with the new file locations.
 - If the `docs/INDEX.md` file is to be `linted`, the keywords associated with each `index entry` must also be normalized (lowercase, alphabetically sorted, without duplicates).
 - If the `linting` process finds a directory within `docs/` that contains exactly one Markdown file and nothing else, it performs the following steps:
-  1. Move the file to the parent directory and rename it to `<directory name>.md`, where `<directory name>` is the `UPPER_SNAKE_CASE` name of the directory the file currently resides in.
+  1. Move the file to the parent directory and rename it to `<directory_name>.md`, where `<directory_name>` is the `UPPER_SNAKE_CASE` name of the directory the file currently resides in.
   2. Derive the new primary heading of the file from its new file name (see *Naming*).
   3. If a file with that name already exists in the parent directory, merge the moved file's content into it (the existing file's primary heading is kept and duplicated content is removed).
   4. Remove the now empty directory.
