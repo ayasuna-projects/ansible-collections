@@ -199,3 +199,7 @@ Every variable name consists of three components joined by a double underscore: 
   - `outputs` — the result (i.e. return value) of a playbook or role. The declarer sets them itself; tasks running afterwards may consume them.
 - `<name>` — the identifier of the variable within its declarer.
 - Naming rules: variable names are lowercase and may only contain letters, digits and underscores. Within a component, only single underscores may occur, with one exception: inside the `<declarer>` component, each dot of a role FQN becomes a double underscore (e.g. `ayasuna__ingot__k8s`).
+
+### Module and role references
+
+- All references to modules and roles must use the FQN of the module or role (for example, `template` becomes `ansible.builtin.template`).
