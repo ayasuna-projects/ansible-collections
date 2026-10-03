@@ -3,7 +3,7 @@
 {% set firewall_args = ayasuna__utilities__host__privates__arguments.prepared %}
 
 {# 
-The base chain priorities have been chosen in such a way that they have the highest possible priority, after their default location, 
+The base chain priorities have been chosen in such a way that they have the lowest possible priority (higher value = lower priority), after their default location,
 for their hook kind without "conflicting" with any netfilter internal operation that may or may not be evaluated for any given hook.   
 #}
 {% set filter_all_chain_priority = 49 %} {# 49 is the priority before NF_IP_PRI_SECURITY, default: 0/NF_IP_PRI_FILTER #}

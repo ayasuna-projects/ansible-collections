@@ -6,7 +6,7 @@ argument_specs:
         - "ayasuna__utilities__acme__inputs__"
     options:
       ayasuna__utilities__acme__inputs__password:
-        description: "The password to secure the account key with"
+        description: "The password to secure the ACME account key with"
         type: "str"
         required: true
       ayasuna__utilities__acme__inputs__state_directory:
@@ -14,52 +14,53 @@ argument_specs:
         type: "str"
         required: true
       ayasuna__utilities__acme__inputs__acme_directory:
-        description: "The ACME (v2) directory to use"
+        description: "The URL of the ACME (v2) directory to use. The default is the Let's Encrypt staging endpoint; use https://acme-v02.api.letsencrypt.org/directory for production certificates"
         type: "str"
         default: "https://acme-staging-v02.api.letsencrypt.org/directory"
       ayasuna__utilities__acme__inputs__account_email:
-        description: "The (contact) E-Mail to use for the account"
+        description: "The contact email address of the ACME account"
         type: "str"
         required: true
   upsert_certificate:
-    short_description: "Creates a new TLS certificate via the ACME protocol"
+    short_description: "Creates a new TLS certificate via the ACME protocol, solving the dns-01 challenge via Hetzner Cloud DNS"
     context:
       prefixes:
         - "ayasuna__utilities__acme__inputs__"
     options:
       ayasuna__utilities__acme__inputs__password:
-        description: "The password to secure the account & certificate key with"
+        description: "The password to secure the account and certificate keys with"
         type: "str"
         required: true
       ayasuna__utilities__acme__inputs__state_directory:
-        description: "The directory in which ACME related state files are stored (account key). The directory will be created if it doesn't exist"
+        description: "The directory in which ACME related state files are stored (account key, certificate private key, ...). The directory will be created if it doesn't exist"
         type: "str"
         required: true
       ayasuna__utilities__acme__inputs__acme_directory:
-        description: "The ACME (v2) directory to use"
+        description: "The URL of the ACME (v2) directory to use. The default is the Let's Encrypt staging endpoint; use https://acme-v02.api.letsencrypt.org/directory for production certificates"
         type: "str"
         default: "https://acme-staging-v02.api.letsencrypt.org/directory"
       ayasuna__utilities__acme__inputs__hetzner_api_token:
-        description: "The hetzner cloud API token to use"
+        description: "The Hetzner Cloud API token to use"
         type: "str"
         required: true
       ayasuna__utilities__acme__inputs__hetzner_api_endpoint:
-        description: "The hetzner cloud API endpoint to use"
+        description: "The URL of the Hetzner Cloud API endpoint to use"
         type: "str"
         default: "https://api.hetzner.cloud/v1"
       ayasuna__utilities__acme__inputs__certificate_zone:
-        description: "The name of the (Hetzner) DNS zone to add the TXT records to so that the the ACME challenge can be solved"
+        description: "The name of the Hetzner Cloud DNS zone in which the TXT records for solving the ACME (dns-01) challenge are created"
         type: "str"
         required: true
       ayasuna__utilities__acme__inputs__certificate_primary_name:
-        description: "The primary (DNS) name of the certificate, will be used as the common name for the certificate"
+        description: "The primary (DNS) name of the certificate; it is used as the common name (CN) of the certificate and is always included as a SAN"
         type: "str"
         required: true
       ayasuna__utilities__acme__inputs__certificate_subject_alternative_names:
-        description: "The SANs of the certificate"
-        type: "str"
+        description: "The subject alternative names (SANs) of the certificate, in addition to the primary name (which is always included as a SAN)"
+        type: "list"
+        elements: "str"
         required: true
       ayasuna__utilities__acme__inputs__certificate_renew_threshold:
-        description: "Renew the certificate if it is valid for less then the specified number of days"
+        description: "The certificate is renewed if it is valid for less than the specified number of days"
         type: "int"
         default: 25

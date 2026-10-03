@@ -35,7 +35,7 @@
   register: ayasuna__utilities__acme__privates__certificate_csr
     
 - name: "[Upsert Certificate>Upsert] Creating ACME certificate challenge for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
-  ansible.builtin.acme_certificate:
+  community.crypto.acme_certificate:
     account_key_src: "{{ ayasuna__utilities__acme__privates__account_key_path }}"
     account_key_passphrase: "{{ ayasuna__utilities__acme__privates__arguments.prepared.password }}"
     acme_directory: "{{ ayasuna__utilities__acme__privates__arguments.prepared.acme_directory }}"
@@ -73,7 +73,7 @@
 
 - block:
     - name: "[Upsert Certificate>Upsert] Validating certificate challenge and retrieving certificate for {{ ayasuna__utilities__acme__privates__arguments.prepared.certificate_primary_name }}"
-      ansible.builtin.acme_certificate:
+      community.crypto.acme_certificate:
         account_key_src: "{{ ayasuna__utilities__acme__privates__account_key_path }}"
         account_key_passphrase: "{{ ayasuna__utilities__acme__privates__arguments.prepared.password }}"
         acme_directory: "{{ ayasuna__utilities__acme__privates__arguments.prepared.acme_directory }}"

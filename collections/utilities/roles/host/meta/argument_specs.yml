@@ -27,7 +27,7 @@ argument_specs:
         required: true
   ssh:
     short_description: |
-      Manages: /etc/sshd_config
+      Manages: /etc/ssh/sshd_config
       
       Configures the SSH service.
     context: *default_context

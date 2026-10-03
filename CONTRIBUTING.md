@@ -96,6 +96,10 @@ The structure of the index file is as follows.
 - Link paths must be relative to the file that contains the link.
 - The `<link_name>` in `[<link_name>](<path_to_file>)` does not need to be the name of the referenced file if another term (or sequence of terms) makes more sense in the current context.
 
+### Placeholder
+
+Within the prose of the documentation, **placeholders** are written in backticks with the label enclosed in angle brackets, for example `<directory>` in `<directory>/config.json`.
+
 ### Entry points: `README.md` and `AGENTS.md`
 
 The project root directory holds two entry point files with distinct roles.

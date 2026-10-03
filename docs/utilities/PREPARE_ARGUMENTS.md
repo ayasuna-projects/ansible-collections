@@ -251,41 +251,34 @@ The prepared arguments then contain the additional `endpoint` argument (`example
 
 ## Parameters
 
-The module accepts a single parameter:
+The module accepts a single parameter, `specification`, which is an extended Ansible argument specification. The parameter and its fields are:
 
-- `specification` (dict, required) — the (extended) argument specification.
-
-The `specification` consists of:
-
-- `options` (dict) — the standard Ansible argument specification options. The top-level keys of `options` are the names of the variables the module reads from the variables that are available to the task. Every option supports the standard `argument_spec` fields (`type`, `description`, `required`, `default`, `choices`, `elements`, `options`, `apply_defaults`, ...); see the [References](#references) section for the full list of fields.
-- `context` (dict, optional) — the context of the specification. It may contain:
-  - `prefixes` (list of str) — the prefixes that are stripped from the argument names. See [Prefixes](#prefixes).
-  - `preparer` (str) — the Python 3 code that validates and/or converts the arguments. See [Preparers](#preparers).
-
-In addition, every option (at any nesting level) may contain a `context` field:
-
-- `context.rules` (list) — the custom validation rules for the option. See [Rules](#rules). Each entry consists of:
-  - `expression` (str) — a Jinja2 expression that must evaluate to a boolean.
-  - `message` (str) — the error message that is reported if the expression evaluates to `false`.
-
-Keys of the specification other than `options` and `context` (e.g. `short_description`) are ignored by the module.
+- `specification` (`dict[str, str | dict]`, required) — the (extended) argument specification. The top-level `options` and `context` keys are described below; other keys of the specification (e.g. `short_description`) are ignored by the module.
+- `specification.options` (`dict[str, dict]`, optional, default `{}`) — the standard Ansible argument specification options. The top-level keys of `options` are the names of the variables the module reads from the variables that are available to the task. Every option supports the standard `argument_spec` fields (`type`, `description`, `required`, `default`, `choices`, `elements`, `options`, `apply_defaults`, ...); see the [References](#references) section for the full list of fields.
+- `specification.options.*.context` (`dict[str, list]`, optional) — the context of an individual option. The `*` matches the name of any option; because options of type `dict` and of type `list` with `elements: dict` may define their own `options`, this applies recursively to options at any nesting level.
+- `specification.options.*.context.rules` (`list[dict]`, optional) — the custom validation rules for the option. See [Rules](#rules).
+- `specification.options.*.context.rules[*].expression` (`str`, required) — a Jinja2 expression that must evaluate to a boolean.
+- `specification.options.*.context.rules[*].message` (`str`, required) — the error message that is reported if the expression evaluates to `false`.
+- `specification.context` (`dict[str, str | list[str]]`, optional) — the context of the specification.
+- `specification.context.prefixes` (`list[str]`, optional, default `[]`) — the prefixes that are stripped from the argument names. See [Prefixes](#prefixes).
+- `specification.context.preparer` (`str`, optional) — the Python 3 code that validates and/or converts the arguments. See [Preparers](#preparers).
 
 ## Return values
 
 If the preparation succeeds, the result contains:
 
-- `prepared` (dict) — the prepared arguments. The keys are the (prefix-stripped) option names and the values are the validated and (optionally) converted values.
-- `hash` (str) — a stable MD5 hash (hex digest) of the prepared arguments serialized as JSON with sorted keys. The hash changes only if the content of the prepared arguments changes, which makes it suitable for detecting changes between runs (e.g. for caching).
-- `specification` (dict) — the specification as it was passed to the module.
-- `changed` (bool) — always `false`. The module only prepares arguments and never changes anything.
-- `msg` (str) — a human-readable status message.
+- `prepared` (`dict`) — the prepared arguments. The keys are the (prefix-stripped) option names and the values are the validated and (optionally) converted values.
+- `hash` (`str`) — a stable MD5 hash (hex digest) of the prepared arguments serialized as JSON with sorted keys. The hash changes only if the content of the prepared arguments changes, which makes it suitable for detecting changes between runs (e.g. for caching).
+- `specification` (`dict`) — the specification as it was passed to the module.
+- `changed` (`bool`) — always `false`. The module only prepares arguments and never changes anything.
+- `msg` (`str`) — a human-readable status message.
 
 If the preparation fails, the task fails and the result contains:
 
-- `changed` (bool) — `false`.
-- `failed` (bool) — `true`.
-- `errors` (list of str) — the individual error messages from the argument validation, the rules, and/or the preparer.
-- `msg` (str) — a message that lists all of the errors.
+- `changed` (`bool`) — `false`.
+- `failed` (`bool`) — `true`.
+- `errors` (`list[str]`) — the individual error messages from the argument validation, the rules, and/or the preparer.
+- `msg` (`str`) — a message that lists all of the errors.
 
 ## References
 
