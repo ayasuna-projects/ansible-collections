@@ -11,7 +11,7 @@ argument_specs:
         required: true
       ayasuna__utilities__ingot__inputs__source_arguments:
         description: |
-          The arguments to "call" the hooks (e.g. "local", "network", "final") of the ingot with when 
+          The arguments to "call" the hooks (e.g. "local.yml", "network.yml", "final.yml") of the ingot with when 
           the ingot it booted.
         type: "dict"
         required: true
@@ -36,11 +36,11 @@ argument_specs:
         type: "int"
         default: 24576
       ayasuna__utilities__ingot__inputs__target_partitions_deployment_history:
-        description: "The maximum number of previous deployments to keep"
+        description: "The maximum number of deployments to keep"
         type: "int"
         default: 10
   build:
-    short_description: | 
+    short_description: |
       Builds a new ingot via packer and QEMU.
       An ingot is a squashfs image of a debian filesystem that follows some additional contracts. 
       The filesystem for example contains some well-defined systemd services that are executed during every boot to configure the host.
@@ -63,7 +63,7 @@ argument_specs:
           The ansible collections to install and copy into the ingot.
           The collections will be installed by calling 'ansible-galaxy collection install' on the host that runs the 
           build process.
-          This parameter provides a subset of the options outlined at https://docs.ansible.com/ansible/latest/collections_guide/collections_installing.html#install-multiple-collections-with-a-requirements-file.
+          This parameter provides a subset of the options outlined at https://docs.ansible.com/projects/ansible/latest/collections_guide/collections_installing.html#install-multiple-collections-with-a-requirements-file.
         type: "list"
         required: true
         elements: "dict"
@@ -80,7 +80,7 @@ argument_specs:
               - "dir"
               - "subdirs"
           name:
-            description: | 
+            description: |
               The name of the collection(s) to install.
               The format and meaning depends on the type (e.g. it might be an URL or path)
             type: "str"
@@ -93,7 +93,7 @@ argument_specs:
       ayasuna__utilities__ingot__inputs__build_ansible_role_fqn:
         description: |
           The fully qualified name of the role to call.
-          A couple of hooks (tasks) are called on this role, whenever a new stage is reached:
+          An entrypoint (in the context of ingots called hook) of this role is called whenever a new stage is reached:
           - install.yml:
               Called exactly once after the "install" stage has been reached during the build of the ingot. 
               The "install" stage is reached after the OS and the systemd services,
@@ -149,7 +149,7 @@ argument_specs:
         default: { }
       ayasuna__utilities__ingot__inputs__test_arguments:
         description: |
-          The arguments to "call" the hooks (e.g. "local", "network", "final") of the ingot with when 
+          The arguments to "call" the hooks (e.g. "local.yml", "network.yml", "final.yml") of the ingot with when 
           testing it.
         type: "dict"
         required: true

@@ -14,6 +14,12 @@
 
 **Keywords:** firewall, hostname, packages, ssh, volume
 
+### [utilities/INGOT.md](utilities/INGOT.md)
+
+**Summary:** Documents how to use the `ayasuna.utilities.ingot` role to build ingots (golden squashfs images of a Debian system) and to deploy them to (U)EFI-booting hosts.
+
+**Keywords:** build, deploy, immutable, ingot, qemu
+
 ### [utilities/PREPARE_ARGUMENTS.md](utilities/PREPARE_ARGUMENTS.md)
 
 **Summary:** Documents how to use the `ayasuna.utilities.prepare_arguments` module to validate and prepare arguments based on an extended `argument_spec`.

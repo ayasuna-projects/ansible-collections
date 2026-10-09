@@ -59,6 +59,7 @@
 - name: "[Build] Copying files to artifacts directory"
   ansible.builtin.copy:
     src: "{{ ayasuna__utilities__ingot__privates__build_item.src }}"
+    remote_src: true
     dest: "{{ ayasuna__utilities__ingot__privates__build_item.tgt }}"
     mode: "0644"
     owner: "root"
@@ -240,6 +241,7 @@
 - name: "[Build] Copying squashfs image (ingot) to target file '{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.target_file }}'"
   ansible.builtin.copy:
     src: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.working_directory }}/vm/build/root.squashfs"
+    remote_src: true
     dest: "{{ ayasuna__utilities__ingot__privates__build_arguments.prepared.target_file }}"
     force: true
     mode: "0777"
