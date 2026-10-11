@@ -7,7 +7,7 @@ some run on every boot of the host, and some run once during the test phase of t
 [Hooks](#hooks) for which hook is called when).
 
 The role has no default entrypoint: each entrypoint must be included explicitly via
-`ansible.builtin.include_role` with `tasks_from`. Its entrypoints are:
+`ansible.builtin.import_role` with `tasks_from`. Its entrypoints are:
 
 - `build.yml` — builds an ingot on the host the play runs on and tests it before the build is considered
   successful.
@@ -17,25 +17,25 @@ All inputs of both entrypoints are declared as variables using the prefix `ayasu
 
 ## How ingots work
 
-Ingots aim to be a middle ground between full-blown golden disk images and systems that are managed manually
-(or semi-manually via tools like Ansible). They address the following drawbacks of those approaches:
+Ingots aim to be a middle ground between using full-blown golden disk images and managing systems manually (or
+semi-manually via tools like Ansible). They address the following drawbacks of those approaches:
 
 - **Golden disk images** generally require a dedicated, separate infrastructure that distributes (and/or
   applies) the images to the hosts — normally involving PXE boot and services such as
   [Canonical MAAS](https://canonical.com/maas). Ingots, on the other hand, are not full disk images: they are
-  golden squashfs images of a Debian system that can be uploaded to a prepared host while it is still running;
-  the host can then be rebooted to boot into the new ingot. Up to a configurable amount of previously uploaded
+  golden squashfs images of a Debian system that can be deployed to a prepared host while it is still running;
+  the host can then be rebooted to boot into the new ingot. Up to a configurable amount of previously deployed
   ingots stay available, so the host can also boot into an earlier ingot (assuming the newer ingot does not
   mutate the persistent state in a non-backwards-compatible way). The one caveat: the host must be (partially)
-  prepared manually for the very first ingot upload — every deployment after the first one can be fully
-  autonomous (similar to golden disk images, via the `deploy.yml` entrypoint).
+  prepared manually for the very first ingot deployment — every deployment after the first one can be fully
+  autonomous, as is the case for golden disk images, via the `deploy.yml` entrypoint.
 - **Manually managed hosts** (or hosts managed semi-manually via tools like Ansible) easily suffer from
   configuration drift, especially if the host is in use for a long time. Ingots are immutable at their core: all
-  modifications to the system configuration made during runtime are by default only made on a `tmpfs` and
-  therefore lost with a reboot. Software that is installed on the root filesystem of the host is gone after the next
-  reboot, so the system always comes back to the state that was baked into the ingot at build time. Ingots by default
-  provide the directory `/var/lib/ingot/data/`, which is persisted across reboots, for state that needs to survive (the
-  `ayasuna.ingot.k8s` ingot makes heavy use of it).
+  modifications to the system configuration made during runtime are by default written to a `tmpfs` and therefore
+  lost with a reboot. Software installed at runtime is gone after the next reboot, so the system always comes back
+  to the state that was baked into the ingot at build time. Ingots by default provide the directory
+  `/var/lib/ingot/data/`, which is persisted across reboots, for state that needs to survive reboots (the
+  `ayasuna.ingot.k8s` ingot role makes heavy use of it).
 
 Ingots only support (U)EFI boot.
 
@@ -43,12 +43,12 @@ Ingots only support (U)EFI boot.
 
 The normal boot procedure of an ingot is as follows:
 
-1. The system shows the GRUB bootloader, with the last ingot that was uploaded to the host as the default
+1. The host starts the GRUB bootloader, with the last ingot that was deployed to the host as the default
    selection.
-2. The custom `initramfs` of the ingot is started, which prepares an `overlayfs` (using the ingot, the squashfs
-   image, as the read-only lowerdir and a `tmpfs` as the upperdir). The `overlayfs` is mounted at `/`.
+2. The custom `initramfs` of the ingot is started, which prepares an `overlayfs` (using the ingot as the read-only
+   lowerdir and a `tmpfs` as the upperdir). The `overlayfs` is mounted at `/`.
 3. The `initramfs` hands control over to the ingot's init system (ingots are based on Debian, i.e. `systemd`).
-4. The normal `systemd` boot process begins, during which a few special services are called. Each service calls
+4. The normal `systemd` boot process begins, during which a few special services are started. Each service calls
    a specific entrypoint (hook) of the ingot role the ingot was built with, and the services and their hooks are
    called in this order — each must run to completion before the next is called:
     - `ingot-local.service` — calls the `local.yml` hook.
@@ -60,12 +60,12 @@ The normal boot procedure of an ingot is as follows:
 When running an ingot, a few special directories exist:
 
 - `/var/lib/ingot/boot/` — the directory into which the ESP partition (to which the GRUB bootloader is
-  installed) is mounted. This directory is part of the internal "API": users and ingots should refrain from
+  installed) is mounted. This directory is part of the internal "API": users and ingot roles should refrain from
   modifying it or its contents (the "BOOT" partition).
 - `/var/lib/ingot/deployment/` — the directory in which the ingots (and their configuration) that have been
-  uploaded to the host can be found. This directory is part of the internal "API": users and ingots should
+  deployed to the host can be found. This directory is part of the internal "API": users and ingot roles should
   refrain from modifying it or its contents (the "DEPLOYMENT" partition).
-- `/var/lib/ingot/data/` — the built-in directory in which users and ingots may store files they want to
+- `/var/lib/ingot/data/` — the built-in directory in which users and ingot roles may store files they want to
   persist across reboots (the "DATA" partition).
 
 ## Entrypoint: `build.yml`
@@ -108,7 +108,7 @@ machine) and expects to be run as `root`. Its inputs are declared as variables u
     # These OVMF firmware files are provided by the 'ovmf' package and must be present on the build host
     ayasuna__utilities__ingot__inputs__qemu_efi_code: "/usr/share/OVMF/OVMF_CODE_4M.fd"
     ayasuna__utilities__ingot__inputs__qemu_efi_vars: "/usr/share/OVMF/OVMF_VARS_4M.fd"
-    # The location of the resulting ingot (squashfs image); a local path here because the ingot is built locally
+    # The location of the resulting ingot; a local path here because the ingot is built locally
     ayasuna__utilities__ingot__inputs__target_file: "{{ playbook_dir }}/../artifacts/rescue.amd64.squashfs"
     ayasuna__utilities__ingot__inputs__build_ansible_role_fqn: "ayasuna.ingot.rescue"
     # This example embeds the hostname to configure and the users allowed to connect to the ingot during the build process.
@@ -170,13 +170,14 @@ start virtual machines in which the ingot is built and tested:
    installation, an Ansible playbook is run inside the VM to customize and finalize the installation (for
    example installing the systemd services that call the hooks during boot, and configuring default kernel
    parameters); the playbook also calls the `install.yml` hook of the ingot role given in
-   `<build_ansible_role_fqn>`. The VM is then shut down and the squashfs image (the actual ingot) is created
-   from the root filesystem of the VM image.
+   `<build_ansible_role_fqn>`. The VM is then shut down and the squashfs image is created from the root
+   filesystem of the VM image.
 2. **Test** — the created ingot is tested in a second VM: the `deploy.yml` entrypoint of this role deploys the
    ingot to the disk of the test VM, the VM boots into it, and an Ansible playbook is executed inside it that,
-   next to a set of base tests, calls the `test.yml` hook of the ingot role (to perform ingot-specific tests).
+   in addition to a set of base tests, calls the `test.yml` hook of the ingot role (to perform ingot-specific
+   tests).
    The ingot is only considered successfully built if all boot hooks and this hook complete successfully.
-3. **Artifact** — after the successful test, the ingot is copied to `<target_file>`.
+3. **Artifact** — after a successful test, the ingot is copied to `<target_file>`.
 
 ### Hooks
 
@@ -222,7 +223,7 @@ The entrypoint declares the following inputs (all using the prefix `ayasuna__uti
 - `ayasuna__utilities__ingot__inputs__build_ansible_collections[*].type` (`str`, required) — determines what
   `name` represents and how to interpret it. One of: `file`, `galaxy`, `git`, `url`, `dir`, `subdirs`.
 - `ayasuna__utilities__ingot__inputs__build_ansible_collections[*].name` (`str`, required) — the name of the
-  collection (s) to install. The format and meaning depends on `<type>` (e.g. it might be a URL or a path).
+  collection (s) to install. The format and meaning depend on `<type>` (e.g. it might be a URL or a path).
 - `ayasuna__utilities__ingot__inputs__build_ansible_collections[*].version` (`str`, optional) — the version of
   the collection (s) to install.
 - `ayasuna__utilities__ingot__inputs__build_ansible_role_fqn` (`str`, required) — the fully qualified name of
@@ -236,7 +237,7 @@ The entrypoint declares the following inputs (all using the prefix `ayasuna__uti
   the ingot's hooks (e.g. `local.yml`, `network.yml`, `final.yml`) with when testing the ingot in the test VM.
 - `ayasuna__utilities__ingot__inputs__test_ssh_ip` (`str`, required) — the IP address the test VM is connected
   to (via SSH).
-- `ayasuna__utilities__ingot__inputs__test_ssh_port` (`int`, required) — the port the test VM is connected to.
+- `ayasuna__utilities__ingot__inputs__test_ssh_port` (`int`, required) — the port used to connect to the test VM.
 - `ayasuna__utilities__ingot__inputs__test_ssh_username` (`str`, required) — the username to use for the
   connection to the test VM.
 - `ayasuna__utilities__ingot__inputs__test_ssh_private_key` (`str`, required) — the private key to use for the
@@ -288,9 +289,9 @@ Deploys a previously built ingot (built via the `build.yml` entrypoint) to the b
 ### Usage
 
 The entrypoint runs on the host the ingot should be deployed to, and Ansible must be able to connect to that
-host via SSH either as `root` or with `ansible_become: true` (the individual tasks of the entrypoint do not use
-the `become` directive). Its inputs are declared as variables using the prefix
-`ayasuna__utilities__ingot__inputs__`:
+host via SSH, either directly as `root` or as a non-root user that can escalate to `root` (via
+`ansible_become: true`; the individual tasks of the entrypoint do not use the `become` directive). Its inputs are
+declared as variables using the prefix `ayasuna__utilities__ingot__inputs__`:
 
 ```yaml
 # Deploys the rescue ingot to a host
@@ -332,7 +333,7 @@ the `become` directive). Its inputs are declared as variables using the prefix
 ```
 
 In this example the role deploys the rescue ingot (built by the `Build rescue ingot` playbook above) to
-`/dev/sda` of the host `rescue01`, keeps the last three deployments, and reboots the host so that it boots into
+`/dev/sda` on the host `rescue01`, keeps the last three deployments, and reboots the host so that it boots into
 the new ingot.
 
 ### Preparing a host for the initial deployment
@@ -341,7 +342,7 @@ The entrypoint requires Ansible to be able to connect to the host via SSH. This 
 hosts that already run an ingot (assuming the ingot allows SSH access and configures/sets up the user Ansible
 uses (`<ansible_user>`) to connect to it accordingly).
 
-If the host is not yet running an ingot, a few manual steps are required to prepare it for the entrypoint:
+If the host is not yet running an ingot, a few manual steps are required to prepare it for the deployment:
 
 1. The following packages must be installed on the host: `sudo`, `openssh-server`, `grub-efi-amd64`, `parted`,
    `e2fsprogs`, `dosfstools`.
@@ -432,8 +433,8 @@ systemctl restart ssh.service
 ### SSH
 
 Ingots by default allow non-root users to connect via SSH using public-key authentication (SSH access via
-`root` is not allowed by default). Custom ingots are, nevertheless, encouraged to configure the SSH service
-themselves, because:
+`root` is not allowed by default). Custom ingot roles are, nevertheless, encouraged to configure the SSH
+service themselves, because:
 
 - The host keys the SSH service uses by default are generated during the ingot build process, so if the same
   ingot is deployed to multiple hosts, they all use the same host keys — most likely not what you want.
@@ -442,8 +443,8 @@ themselves, because:
   the `known_hosts` file.
 
 One way to configure the SSH service is to use the `ssh.yml` entrypoint of the `ayasuna.utilities.host` role
-during the `local.yml` hook (as the `ayasuna.ingot.k8s` ingot does): it allows configuring the directory the SSH
-service should use for its host keys (missing host keys are generated as necessary) — for example
+during the `local.yml` hook (as the `ayasuna.ingot.k8s` ingot role does): it allows configuring the directory
+the SSH service should use for its host keys (missing host keys are generated as necessary) — for example
 `/var/lib/ingot/data/ssh/`, which persists across reboots.
 
 ### Behavior
@@ -463,9 +464,9 @@ The entrypoint performs the following on the host, in order:
 3. **Deploy** — the ingot given in `<source_ingot>` is copied to a new deployment directory on the `DEPLOYMENT`
    partition, together with the deployment arguments (`<source_arguments>`). The GRUB bootloader is installed (or
    updated) on the `BOOT` partition such that the most recently deployed ingot becomes the default boot
-   entry, while up to `<target_partitions_deployment_history>` previously deployed ingots (including the one
-   currently being deployed) remain available for booting. Deployments beyond that number are removed from the
-   `DEPLOYMENT` partition.
+   entry, while up to `<target_partitions_deployment_history>` ingots (including the one currently being
+   deployed) remain available for booting. Deployments beyond that number are removed from the `DEPLOYMENT`
+   partition.
 4. **Reboot** — the host must be rebooted for the new ingot to take effect (see the example playbook above).
 
 The `DEPLOYMENT` partition must be large enough to accommodate `<target_partitions_deployment_history>` ingots.
@@ -477,7 +478,7 @@ The entrypoint declares the following inputs (all using the prefix `ayasuna__uti
 - `ayasuna__utilities__ingot__inputs__source_ingot` (`str`, required) — the path to the ingot (squashfs image)
   to deploy.
 - `ayasuna__utilities__ingot__inputs__source_arguments` (`dict[str, any]`, required) — the arguments to "call"
-  the ingot's hooks (e.g. `local.yml`, `network.yml`, `final.yml`) with when the ingot is booted.
+  the ingot's hooks (e.g. `local.yml`, `network.yml`, `final.yml`) with when the host boots into the ingot.
 - `ayasuna__utilities__ingot__inputs__target_device_serial` (`str`, optional, default `null`) — the serial
   number of the block device to deploy to. Mutually exclusive with `<target_device_path>`: exactly one of the
   two must be specified.

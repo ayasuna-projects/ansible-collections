@@ -2,6 +2,12 @@
 
 ## Documents
 
+### [ingot/RESCUE.md](ingot/RESCUE.md)
+
+**Summary:** Documents how to use the `ayasuna.ingot.rescue` role to build a simple rescue system as an ingot and to deploy it (for example to a USB stick) so that a (U)EFI host can boot into it.
+
+**Keywords:** efi, rescue, ssh, usb
+
 ### [utilities/ACME.md](utilities/ACME.md)
 
 **Summary:** Documents how to use the `ayasuna.utilities.acme` role to create or update an ACME account and to issue TLS certificates via the ACME (v2) protocol, solving the `dns-01` challenge via Hetzner Cloud DNS.
