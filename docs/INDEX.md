@@ -2,11 +2,18 @@
 
 ## Documents
 
+### [ingot/K8S.md](ingot/K8S.md)
+
+**Summary:** Documents how to use the `ayasuna.ingot.k8s` role to build an ingot that runs a K3s node (a
+K3s server or agent) and to deploy it to a (U)EFI-booting host.
+
+**Keywords:** cluster, ingot, k3s, kubernetes, node
+
 ### [ingot/RESCUE.md](ingot/RESCUE.md)
 
 **Summary:** Documents how to use the `ayasuna.ingot.rescue` role to build a simple rescue system as an ingot and to deploy it (for example to a USB stick) so that a (U)EFI host can boot into it.
 
-**Keywords:** efi, rescue, ssh, usb
+**Keywords:** efi, ingot, rescue, ssh, usb
 
 ### [utilities/ACME.md](utilities/ACME.md)
 
