@@ -107,6 +107,233 @@ The project root directory holds two entry point files with distinct roles.
 - `README.md` is the human entry point of the project. It stays short and provides a short overview over the project. It must contain a link to `CONTRIBUTING.md` and to `docs/INDEX.md`. It may either contain a quickstart section or point to `docs/QUICKSTART.md` (or a similar file) for a still brief but more exhaustive introduction into how to get started with the project (this normally includes simplified installation instructions for the project).
 - `AGENTS.md` is the AI agent entry point of the project. It must point to `CONTRIBUTING.md`, `README.md` and `docs/INDEX.md`. It holds the implementation details and other information that is important for AI agents to know.
 
+### Module, role and ingot role documentation file structure
+
+This section defines the structure of the documentation files for the modules, roles and ingot roles of the project. It also defines the list formats that are shared by their `Parameters`, `Return values` and `References` sections.
+
+#### Module documentation
+
+The documentation of a module is a single Markdown file within `docs/` (see [File placement](#file-placement) and [Naming](#naming)). Its content has the following structure:
+
+- The primary heading is the name of the module, derived from the file name.
+- A short introduction describing what the module does.
+- A `## Usage` section describing how the module can be used, typically including a complete example.
+- Any number (possibly zero) of module-specific second-level sections between `Usage` and `Parameters`, covering topics that do not fit into the fixed sections (for example, the concepts, the behavior, or specific features of the module).
+- A `## Parameters` section consisting of a short introduction (for example, "The module has the following parameters") and a list of all parameters of the module in the format defined in [Parameters and return values](#parameters-and-return-values).
+- A `## Return values` section consisting of a short introduction and a list of all return values of the module in the format defined in [Parameters and return values](#parameters-and-return-values).
+- A `## References` section containing a list of links in the format defined in [References](#references).
+
+The skeleton of the structure is as follows.
+
+```markdown
+# <module_name>
+
+<short_description_of_the_module>
+
+## Usage
+
+<how_the_module_can_be_used>
+
+## <first_module_specific_section>
+
+<section_content>
+
+## <second_module_specific_section>
+
+<section_content>
+
+## Parameters
+
+<short_introduction>
+
+- <the_parameters_of_the_module>
+
+## Return values
+
+<short_introduction>
+
+- <the_return_values_of_the_module>
+
+## References
+
+- <the_links>
+```
+
+#### Role documentation
+
+The documentation of a (regular, non-ingot) role is a single Markdown file within `docs/` (see [File placement](#file-placement) and [Naming](#naming)). Its content has the following structure:
+
+- The primary heading is the name of the role, derived from the file name.
+- A short introduction describing what the role does.
+- Any number (possibly zero) of role-specific second-level sections that cover topics applying to the role as a whole rather than to a particular entrypoint.
+- One `## Entrypoint: <entrypoint_name>.yml` section for each entrypoint of the role. Each such section consists of:
+  - A short introduction describing the entrypoint.
+  - A `### Usage` section describing how the entrypoint can be included in a playbook, typically including a complete example.
+  - Any number (possibly zero) of entrypoint-specific third-level sections (for example, the prerequisites or the behavior of the entrypoint).
+  - A `### Parameters` section consisting of a short introduction (for example, "The entrypoint declares the following inputs") and a list of all inputs of the entrypoint in the format defined in [Parameters and return values](#parameters-and-return-values).
+  - A `### Return values` section consisting of a short introduction and a list of all outputs of the entrypoint in the format defined in [Parameters and return values](#parameters-and-return-values). This section is omitted if the entrypoint declares no outputs.
+- A `## References` section containing a list of links in the format defined in [References](#references). It is the last section of the file.
+
+The skeleton of the structure is as follows (the `Entrypoint` section is repeated for each entrypoint of the role).
+
+```markdown
+# <role_name>
+
+<short_description_of_the_role>
+
+## <first_role_specific_section_not_belonging_to_a_particular_entrypoint>
+
+<section_content>
+
+## <second_role_specific_section_not_belonging_to_a_particular_entrypoint>
+
+<section_content>
+
+## Entrypoint: `<entrypoint_name>.yml`
+
+<short_description_of_the_entrypoint>
+
+### Usage
+
+<how_the_entrypoint_can_be_used>
+
+### <first_entrypoint_specific_section>
+
+<section_content>
+
+### <second_entrypoint_specific_section>
+
+<section_content>
+
+### Parameters
+
+<short_introduction>
+
+- <the_inputs_of_the_entrypoint>
+
+### Return values
+
+<short_introduction>
+
+- <the_outputs_of_the_entrypoint>
+
+## References
+
+- <the_links>
+```
+
+#### Ingot role documentation
+
+The documentation of an ingot role is a single Markdown file within `docs/` (see [File placement](#file-placement) and [Naming](#naming)). Its content has the following structure:
+
+- The primary heading is the name of the role, derived from the file name.
+- A short introduction describing what the ingot role does and what the ingot it produces does.
+- A `## Usage` section describing how the ingot role can be used (that is, how an ingot with it is built and deployed).
+- Any number (possibly zero) of ingot role-specific second-level sections between `Usage` and `Parameters`, covering topics that do not fit into the fixed sections (for example, the behavior of the hooks of the role during the build or at boot).
+- A `## Parameters` section consisting of a short introduction and exactly two third-level subsections:
+  - `### Build` — a short introduction and a list of all parameters the role requires at build time (that is, the parameters of its `install.yml` hook) in the format defined in [Parameters and return values](#parameters-and-return-values).
+  - `### Deploy` — a short introduction and a list of all parameters the role requires at deployment time (that is, the union of the parameters of all of its hooks except the `install.yml` hook) in the format defined in [Parameters and return values](#parameters-and-return-values).
+- A `## References` section containing a list of links in the format defined in [References](#references). It is the last section of the file.
+
+The skeleton of the structure is as follows.
+
+```markdown
+# <role_name>
+
+<short_description_of_the_ingot_role>
+
+## Usage
+
+<how_the_ingot_role_can_be_used>
+
+## <first_ingot_role_specific_section>
+
+<section_content>
+
+## <second_ingot_role_specific_section>
+
+<section_content>
+
+## Parameters
+
+<short_introduction>
+
+### Build
+
+<short_introduction>
+
+- <the_build_time_parameters_of_the_role>
+
+### Deploy
+
+<short_introduction>
+
+- <the_deployment_time_parameters_of_the_role>
+
+## References
+
+- <the_links>
+```
+
+#### Parameters and return values
+
+The `Parameters` and `Return values` sections of the documentation of modules, roles and ingot roles list and describe the parameters (inputs) and return values (outputs) of the documented thing, one bullet per entry, using the format defined in this section.
+
+Each entry consists of the name of the parameter or return value, its type, (for parameters) a marker for whether it is required or optional and, if applicable, its default value, and a description of it, in that order; the description is separated from the rest by an em dash (`—`).
+
+For a parameter, the form of the entry depends on whether the parameter is required or optional and whether it has a default value:
+
+```
+- `<parameter_name>` (`<parameter_type>`, optional, default `<parameter_default_value>`) — <parameter_description> (the parameter is optional and has a default value)
+- `<parameter_name>` (`<parameter_type>`, optional) — <parameter_description> (the parameter is optional and has no default value)
+- `<parameter_name>` (`<parameter_type>`, required) — <parameter_description> (the parameter is required)
+```
+
+`<parameter_name>` is always the full name of the parameter, not an abbreviated `<placeholder>` form. Within the `<parameter_description>`, however, variables may be referenced using the abbreviated `<placeholder>` form.
+
+The fields of a `dict` parameter are described by appending the name of the field to the name of the parameter with a `.`:
+
+```
+- `<parameter_name>` (`dict[str, <value_type>]`, optional, default `<parameter_default_value>`) — <parameter_description> (the `dict` parameter itself)
+- `<parameter_name>.<nested_field_name>` (`<parameter_type>`, optional, default `<parameter_default_value>`) — <parameter_description> (a field of the `dict` parameter)
+- `<parameter_name>.*.<nested_field_name>` (`<parameter_type>`, required) — <parameter_description> (a field two levels below the parameter, with the name of the intermediate key being unknown/arbitrary)
+```
+
+The elements of a `list` parameter are described by appending the index of the element to the name of the parameter with square brackets. The list parameter itself is described with the type of its elements:
+
+```
+- `<parameter_name>` (`list[<element_type>]`, required) — <parameter_description> (the `list` parameter itself)
+```
+
+If the elements of the list are `dict`s, their fields are described as follows:
+
+```
+- `<parameter_name>[*].<nested_field_name>` (`<parameter_type>`, optional, default `<parameter_default_value>`) — <parameter_description> (all elements of the list have the same role/meaning)
+- `<parameter_name>[0].<nested_field_name>` (`<parameter_type>`, optional) — <parameter_description> (the first element of the list has a special role/meaning)
+- `<parameter_name>[n].<nested_field_name>` (`<parameter_type>`, required) — <parameter_description> (the n-th element of the list has a special role/meaning)
+- `<parameter_name>[-1].<nested_field_name>` (`<parameter_type>`, required) — <parameter_description> (the last element of the list has a special role/meaning)
+```
+
+The `required`/`optional` marker and the `default` part of the entries for nested fields follow the same rules as for top-level parameters.
+
+The entries for return values are a simplified version of the entries for parameters: they carry only the name, the type, and the description of the return value (the `required`/`optional` marker and the default value do not apply to return values):
+
+```
+- `<return_value_name>` (`<return_value_type>`) — <return_value_description>
+```
+
+#### References
+
+The `References` section at the end of the documentation of a module, role or ingot role is a bullet list of links to resources that are relevant to the documented thing, for example the documentation, the specification, or the manual pages of a tool, a protocol, or a standard it uses.
+
+Each entry is a link followed by a single sentence describing what is behind the link:
+
+```
+- [<link_name>](<url>) — <one_sentence_describing_what_is_behind_the_link>
+```
+
+The `References` section of a role (including an ingot role) must include a link to the role's `argument_specs.yml` file, from which the inputs listed in the `Parameters` section are derived.
+
 ### Linting
 
 - When an AI agent is asked to `lint` the documentation, it must check all documentation files (that is, the root `AGENTS.md`, `CONTRIBUTING.md` and `README.md` plus everything within `docs/`) for dead links, style, readability and up-to-date information.
@@ -115,7 +342,7 @@ The project root directory holds two entry point files with distinct roles.
 - If the `docs/INDEX.md` file is to be `linted`, the keywords associated with each `index entry` must also be normalized (lowercase, alphabetically sorted, without duplicates).
 - If the `linting` process finds a directory within `docs/` that contains exactly one Markdown file and nothing else, it performs the following steps:
   1. Move the file to the parent directory and rename it to `<directory_name>.md`, where `<directory_name>` is the `UPPER_SNAKE_CASE` name of the directory the file currently resides in.
-  2. Derive the new primary heading of the file from its new file name (see *Naming*).
+  2. Derive the new primary heading of the file from its new file name (see [Naming](#naming))).
   3. If a file with that name already exists in the parent directory, merge the moved file's content into it (the existing file's primary heading is kept and duplicated content is removed).
   4. Remove the now empty directory.
   5. Update the `index entries` in `docs/INDEX.md` to reflect the new file location and name.

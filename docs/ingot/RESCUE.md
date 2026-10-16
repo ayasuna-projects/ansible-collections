@@ -251,8 +251,16 @@ The resulting policies are:
 
 ## Parameters
 
-The `local.yml`, `network.yml`, `final.yml`, and `test.yml` entrypoints of the role declare the following inputs
-(all using the prefix `ayasuna__ingot__rescue__inputs__`). The `install.yml` entrypoint declares no inputs.
+The role's hooks declare the following inputs (all using the prefix `ayasuna__ingot__rescue__inputs__`).
+
+### Build
+
+The `install.yml` hook declares no inputs.
+
+### Deploy
+
+The `local.yml`, `network.yml`, `final.yml`, and `test.yml` entrypoints of the role declare the following
+inputs:
 
 - `ayasuna__ingot__rescue__inputs__name` (`str`, required) — the hostname to set on the system.
 - `ayasuna__ingot__rescue__inputs__users` (`list[dict]`, required) — the users to set up/configure. At least one

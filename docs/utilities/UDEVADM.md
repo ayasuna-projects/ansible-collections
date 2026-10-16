@@ -7,7 +7,11 @@ the UDEV event queue to become empty.
 The role does not create or modify UDEV rules files. It expects the rules files (typically in `/etc/udev/rules.d/`) to
 already exist and makes the running `udevd` daemon pick them up.
 
-## Usage
+## Entrypoint: `main.yml`
+
+The entrypoint performs the role's `udevadm` operations (reload, trigger, and settle) on the host the play runs on.
+
+### Usage
 
 The role is used like any other role by including it in a play. Its inputs are declared as variables using the
 prefix `ayasuna__utilities__udevadm__inputs__`:
@@ -50,7 +54,7 @@ The tasks of the role run on the host the play is connected to, so the role must
 systems with systemd/udev) and the user running the tasks must be allowed to communicate with the `udevd` daemon
 (typically root).
 
-## Operations
+### Operations
 
 The role performs the following operations in this order:
 
@@ -66,7 +70,7 @@ The role performs the following operations in this order:
    until the UDEV event queue is empty, so that subsequent tasks can rely on the triggered events having been fully
    processed.
 
-## Triggers
+### Triggers
 
 Each entry of `<trigger>` corresponds to a single invocation of `udevadm trigger`, and the entries are executed in the
 order they are listed. Every entry consists of three fields, all of which are required:
@@ -77,7 +81,7 @@ order they are listed. Every entry consists of three fields, all of which are re
 - `match_subsystem` — triggers events only for the devices matching the given subsystem. Currently only `net` is
   supported.
 
-## Settle
+### Settle
 
 `<settle_timeout>` is the timeout in seconds for the `udevadm settle` command:
 
@@ -87,9 +91,9 @@ order they are listed. Every entry consists of three fields, all of which are re
   that the queue is empty after the timeout. Tasks that run after the role should therefore tolerate events that are
   still being processed, if necessary.
 
-## Parameters
+### Parameters
 
-The role declares the following inputs (all using the prefix `ayasuna__utilities__udevadm__inputs__`):
+The entrypoint declares the following inputs (all using the prefix `ayasuna__utilities__udevadm__inputs__`):
 
 - `ayasuna__utilities__udevadm__inputs__reload` (`bool`, optional, default `true`) — whether to reload the UDEV ruleset
   (`udevadm control --reload`).

@@ -498,8 +498,24 @@ denies root login. Therefore:
 
 ## Parameters
 
+The role's hooks declare the following inputs (all using the prefix `ayasuna__ingot__k8s__inputs__`).
+
+### Build
+
+The `install.yml` hook declares the following inputs. They must be provided at build time (via
+`ayasuna__utilities__ingot__inputs__build_ansible_role_arguments`):
+
+- `ayasuna__ingot__k8s__inputs__k3s_version` (`str`, required) — the K3s version to install (a K3s release
+  tag, for example `v1.32.5+k3s1`). The corresponding `amd64` `k3s` binary is downloaded (with SHA-256
+  verification) from the K3s GitHub releases during the build.
+- `ayasuna__ingot__k8s__inputs__packages` (`list[str]`, optional, default `[]`) — the additional APT
+  packages to install during the build, in addition to the fixed set the role always installs (see
+  [Behavior](#behavior)).
+
+### Deploy
+
 The `local.yml`, `network.yml`, `final.yml`, and `test.yml` entrypoints of the role declare the following
-inputs (all using the prefix `ayasuna__ingot__k8s__inputs__`):
+inputs:
 
 - `ayasuna__ingot__k8s__inputs__debug` (`bool`, optional, default `false`) — whether to run in debug mode; if
   `true`, the `local.yml` hook additionally waits 30 seconds before completing.
@@ -588,17 +604,6 @@ inputs (all using the prefix `ayasuna__ingot__k8s__inputs__`):
   the node responsible for bootstrapping the cluster (the first server). It must be one of the
   `<k3s_node_ipv6_ip>` / `<k3s_node_ipv4_ip>` values of the cluster's nodes (see
   [Cluster bootstrap](#cluster-bootstrap)).
-
-The `install.yml` entrypoint declares the following inputs (same prefix). They must be provided at build
-time (via `ayasuna__utilities__ingot__inputs__build_ansible_role_arguments`), as no deployment arguments are
-available during the build:
-
-- `ayasuna__ingot__k8s__inputs__k3s_version` (`str`, required) — the K3s version to install (a K3s release
-  tag, for example `v1.32.5+k3s1`). The corresponding `amd64` `k3s` binary is downloaded (with SHA-256
-  verification) from the K3s GitHub releases during the build.
-- `ayasuna__ingot__k8s__inputs__packages` (`list[str]`, optional, default `[]`) — the additional APT
-  packages to install during the build, in addition to the fixed set the role always installs (see
-  [Behavior](#behavior)).
 
 ## References
 
